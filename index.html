@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Demo · Suite de Poligrafía</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#F4F6F7;--card:#fff;--ink:#1B2A33;--mut:#52636B;--line:#DCE3E6;--br:#0F766E;--brt:#fff;--okb:#E3F1EF;--ok:#0B5C55;--wab:#FCEFD5;--wa:#6B4200;--badb:#FBE3E3;--bad:#8A1F1F;--hd:#1B2A33;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10181C;--card:#182329;--ink:#E6EEF1;--mut:#9FB1B8;--line:#2A3A42;--br:#2DB3A6;--brt:#06201D;--okb:#14403B;--ok:#8FE3D8;--wab:#443212;--wa:#F5D28A;--badb:#4A1F1F;--bad:#FFB4B4;--hd:#0B1115;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10181C;--card:#182329;--ink:#E6EEF1;--mut:#9FB1B8;--line:#2A3A42;--br:#2DB3A6;--brt:#06201D;--okb:#14403B;--ok:#8FE3D8;--wab:#443212;--wa:#F5D28A;--badb:#4A1F1F;--bad:#FFB4B4;--hd:#0B1115;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px}
+.shell{display:flex;min-height:100vh}
+.sb{width:220px;flex:none;background:var(--hd);padding:18px 12px;display:flex;flex-direction:column;gap:2px;box-sizing:border-box}
+.sb h1{font-size:15px;margin:0 8px 14px;color:#fff}
+.sb button{text-align:left;min-height:40px;padding:0 12px;border:0;border-radius:8px;background:none;color:#D7E0E4;font:inherit;font-size:13px;cursor:pointer}
+.sb button.on{background:var(--br);color:var(--brt);font-weight:700}
+.sb label{margin-top:auto;font-size:12px;color:#D7E0E4;display:flex;flex-direction:column;gap:4px;padding:12px 4px 0}
+@media(max-width:780px){.shell{flex-direction:column}.sb{width:auto;flex-direction:row;flex-wrap:wrap}.sb h1,.sb label{width:100%}}
+main{flex:1;min-width:0;padding:20px 24px 28px;display:flex;flex-direction:column;gap:14px}
+select,input,textarea{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);box-sizing:border-box;max-width:100%}
+.card{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--ac,var(--mc,var(--line)));border-radius:12px;padding:16px}
+.note{background:var(--okb);color:var(--ok);border-radius:10px;padding:10px 14px;font-size:13px}
+h2{margin:0 0 4px;font-size:20px}h3{margin:0 0 10px;font-size:14px}
+.mut{color:var(--mut);font-size:13px}.big{font-size:28px;font-weight:700;margin-top:4px}
+.sc{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.pill{font-size:12px;padding:3px 10px;border-radius:99px;white-space:nowrap}
+.ok{background:var(--okb);color:var(--ok)}.wa{background:var(--wab);color:var(--wa)}.bad{background:var(--badb);color:var(--bad)}
+.f{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.f label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}
+.sl{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin:10px 0}
+.sl button,.btn,.tb button{min-height:44px;border-radius:8px;border:1px solid var(--br);background:var(--card);color:var(--ink);font:inherit;cursor:pointer}
+.sl button.sel,.btn,.tb button.on{background:var(--br);color:var(--brt);font-weight:700}
+.sl button:disabled{background:var(--line);border-color:var(--line);color:var(--mut);cursor:not-allowed}
+.btn{padding:0 18px;margin-top:12px}.sm{min-height:36px;padding:0 12px;font-size:12px;margin:0}
+.tb{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.tb button{padding:0 14px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}
+.fm{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.bar{height:10px;border-radius:5px;background:var(--line);margin:6px 0 10px}.bar i{display:block;height:10px;border-radius:5px;background:var(--br)}
+.ct th,.ct td{border:1px solid var(--line);padding:4px;vertical-align:top;min-width:118px;white-space:normal}
+.ct td.t{min-width:50px;color:var(--mut);font-size:12px}.ct th.hoy{background:var(--okb);color:var(--ok)}
+.ev{border-radius:6px;padding:6px;font-size:12px;line-height:1.35;min-height:44px;box-sizing:border-box}
+.ev.Programada{background:var(--okb);color:var(--ok)}.ev.Realizada{background:var(--br);color:var(--brt)}.ev.x{background:var(--wab);color:var(--wa)}.ev.o{background:var(--line);color:var(--mut)}
+.add{width:100%;min-height:44px;border:1px dashed var(--line);background:none;color:var(--mut);border-radius:6px;cursor:pointer}
+.chk{width:20px;height:20px}.btn:disabled{opacity:.5;cursor:not-allowed}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;vertical-align:middle;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+</style>
+</head>
+<body>
+<div class="shell"><aside class="sb" id="sb"></aside><main id="app"></main></div>
+<script>
+const TODAY='2026-10-27',WK0='2026-10-26',WK1='2026-10-31';
+const ROLES=[['admin','Administrador'],['analista','Analista'],['P1','Poligrafista 1'],['P2','Poligrafista 2'],['P3','Poligrafista 3'],['th','Talento Humano'],['lider','Líder A']];
+const CITY={'Medellín':'P1','Envigado':'P1','Rionegro':'P1','Bogotá':'P2','Tunja':'P2','Ibagué':'P2','Cali':'P3','Pereira':'P3','Popayán':'P3'};
+const ZONA={P1:'Antioquia',P2:'Centro',P3:'Occidente'},PN={P1:'Poligrafista 1',P2:'Poligrafista 2',P3:'Poligrafista 3'};
+const SLOTS=['8:00','9:30','11:00','14:00','15:30'],DN=['Lun','Mar','Mié','Jue','Vie','Sáb'];
+const CIT=p=>Object.keys(CITY).filter(c=>CITY[c]===p);
+const MENU={admin:['dash','cal','diaria','prog','res','resumen','venc','val','arq','cgm','form','usr'],analista:['dash','cal','diaria','res','resumen','venc','val','arq','cgm','form'],poli:['dash','cal','resumen','res','val','arq','cgm','form'],th:['prog','cal','res'],lider:['cal']};
+const LBL={dash:'Dashboard de cumplimiento',cal:'Calendario',prog:'Programar prueba',res:'Resultados',venc:'Vencimientos',val:'Validaciones de cuentas',arq:'Arqueos',cgm:'Apoyo CGM',form:'Formatos de entrevista',usr:'Usuarios y roles',diaria:'Programación diaria',resumen:'Resumen de actividades'};
+const INFO={admin:'Ve y programa todo, cierra pruebas y registra validaciones, arqueos y apoyos.',analista:'Consulta y valida resultados, vencimientos, informes y formatos; saca la programación diaria de los tres poligrafistas en un solo archivo y notifica al administrador; no programa.',poli:'Ve y cierra solo sus pruebas; registra validaciones, arqueos y apoyos; envía su resumen diario; usa los formatos.',th:'Programa preempleo y consulta solo las preempleo realizadas: resultado, admisión e informe. Sin formatos ni otras pruebas.',lider:'Solo ve su agenda y recibe los correos de confirmación; lo demás aparece como «Ocupado».'};
+const T=(n,doc,cargo,ciudad,f,h,t,e,r,l,adm)=>({id:0,n,doc,cargo,ciudad,f,h,t,p:CITY[ciudad],e,r,l,adm:adm||'',obs:''});
+const S={role:'admin',view:'dash',msg:'',mails:[],wk:0,cp:'P1',closing:0,cl:{},sel:{},vf:'all',queue:[],dd:TODAY,rs:'P1',
+form:{tipo:'Preempleo',n:'',doc:'',cargo:'',l:'Líder A',ciudad:'Envigado',f:'2026-10-29',h:'',adm:''},
+rf:{val:{f:TODAY},arq:{f:TODAY},cgm:{f:TODAY}},
+tests:[T('Funcionario 11','00.000.011','Cajero','Medellín','2026-05-12','9:30','Preempleo','Realizada','Aprobó','Líder A','admision_f11.pdf'),
+T('Funcionario 12','00.000.012','Analista','Bogotá','2025-10-03','9:30','Control','Realizada','Aprobó','Líder B','admision_f12.pdf'),
+T('Funcionario 13','00.000.013','Director de oficina','Cali','2026-08-20','8:00','Control','Realizada','Inconcluso','Líder A','admision_f13.pdf'),
+T('Funcionario 14','00.000.014','Tesorero','Medellín','2026-01-15','11:00','Control','Realizada','Aprobó','Líder C','admision_f14.pdf'),
+T('Candidato 04','00.000.004','Cajero','Medellín','2026-10-22','9:30','Preempleo','Realizada','Aprobó','Líder A','admision_c04.pdf'),
+T('Funcionario 06','00.000.006','Cajero','Medellín','2026-10-27','9:30','Control','Programada','','Líder A'),
+T('Candidato 02','00.000.002','Analista','Bogotá','2026-10-28','8:00','Preempleo','Programada','','Líder B'),
+T('Candidato 03','00.000.003','Tesorero','Cali','2026-10-30','11:00','Preempleo','Programada','','Líder A'),
+T('Funcionario 21','00.000.021','Cajero','Medellín','2026-10-27','8:00','Control','Realizada','Aprobó','Líder A','admision_f21.pdf'),
+T('Funcionario 22','00.000.022','Analista','Envigado','2026-10-27','11:00','Control','Realizada','Aprobó','Líder B','admision_f22.pdf'),
+T('Funcionario 23','00.000.023','Tesorero','Rionegro','2026-10-27','14:00','Control','Realizada','Aprobó','Líder C','admision_f23.pdf'),
+T('Candidato 05','00.000.005','Cajero','Medellín','2026-10-27','15:30','Preempleo','Realizada','Aprobó','Líder A','admision_c05.pdf')],
+rec:{val:[{p:'P3',f:'2026-10-27',o:'Oficina A',ini:'09:00',fin:'11:30',d:45,obs:'Sin hallazgos relevantes.',ev:'foto1.jpg'}],
+arq:[{p:'P2',f:'2026-10-27',o:'Oficina D',who:'Poligrafista 2',ced:'00.000.000',pres:'Funcionario 15',enc:1200000,sis:1250000,nov:'Faltante',ini:'14:00',fin:'15:30',d:60,pdf:'arqueo_d.pdf'}],
+cgm:[{p:'P1',f:'2026-10-27',tipo:'Apoyo CGM',ini:'08:00',fin:'12:00',d:30}]}};
+S.tests.forEach((x,i)=>x.id=i+1);
+['2026-10-26','2026-10-27','2026-10-28','2026-10-29'].forEach(f=>S.rec.cgm.push({p:'P2',f,tipo:'Apoyo CGM',ini:'08:00',fin:'18:00',d:30}));
+const FC={val:[['o','Oficina a validar','text'],['f','Fecha','date'],['ini','Hora de inicio','time'],['fin','Hora de finalización','time'],['d','Desplazamiento (min, no efectivo)','number'],['obs','Análisis de lo observado','area'],['ev','Foto de evidencia','file']],
+arq:[['o','Oficina','text'],['f','Fecha del arqueo','date'],['who','Quien realiza el arqueo','text'],['ced','Cédula','text'],['pres','Quien presencia','text'],['enc','Saldo encontrado','number'],['sis','Saldo de sistema','number'],['nov','Novedad','sel',['Sin novedad','Faltante','Sobrante']],['ini','Hora de inicio','time'],['fin','Hora de finalización','time'],['d','Desplazamiento (min)','number'],['pdf','PDF del arqueo','file'],['atm','Evidencia ATM (si tiene)','file']],
+cgm:[['f','Fecha','date'],['tipo','Tipo de apoyo','text'],['ini','Hora de inicio','time'],['fin','Hora de finalización','time'],['d','Desplazamiento (min, no efectivo)','number'],['obs','Observaciones','area'],['sop','Soporte (PDF o foto)','file']]};
+const MC={dash:'#14B8A6',cal:'#3B82F6',diaria:'#8B5CF6',resumen:'#EC4899',prog:'#F59E0B',res:'#22C55E',venc:'#EF4444',val:'#06B6D4',arq:'#F97316',cgm:'#6366F1',form:'#84CC16',usr:'#94A3B8'};
+const PC={P1:'#3B82F6',P2:'#F59E0B',P3:'#8B5CF6'};
+const dot=v=>'<i class="dot" style="background:'+MC[v]+'"></i>',pad=s=>s.length<5?'0'+s:s;
+const dlh=()=>({save:async o=>{const b=new Blob([o.data],{type:'application/octet-stream'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=o.filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);}});
+const money=n=>'$ '+Number(n).toLocaleString('es-CO');
+const COLS={val:[['Fecha',r=>fmt(r.f)],['Oficina',r=>esc(r.o)],['Poligrafista',r=>PN[r.p]],['Horario',r=>r.ini+'–'+r.fin],['Evidencia',r=>r.ev?esc(r.ev):'—']],
+arq:[['Fecha',r=>fmt(r.f)],['Oficina',r=>esc(r.o)],['Poligrafista',r=>PN[r.p]],['Diferencia',r=>money(r.enc-r.sis)],['Novedad',r=>pill(r.nov==='Sin novedad'?'ok':'bad',r.nov)],['Horario',r=>r.ini+'–'+r.fin]],
+cgm:[['Fecha',r=>fmt(r.f)],['Poligrafista',r=>PN[r.p]],['Tipo',r=>esc(r.tipo||'—')],['Horario',r=>r.ini+'–'+r.fin],['Desplazamiento',r=>(r.d||0)+' min']]};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const D=s=>{const a=s.split('-').map(Number);return new Date(a[0],a[1]-1,a[2])};
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const addM=(s,n)=>{const d=D(s);d.setMonth(d.getMonth()+n);return iso(d)};
+const addD=(s,n)=>{const d=D(s);d.setDate(d.getDate()+n);return iso(d)};
+const fmt=s=>D(s).toLocaleDateString('es-CO',{day:'numeric',month:'short',year:'numeric'});
+const dd=(a,b)=>Math.round((D(a)-D(b))/864e5);
+const pill=(c,t)=>'<span class="pill '+c+'">'+t+'</span>';
+const rp=x=>x.e==='Realizada'?pill(x.r==='Aprobó'?'ok':x.r==='No aprobó'?'bad':'wa',x.r):pill(x.e==='Programada'?'ok':'wa',x.e==='Reprogramar'?'Por reprogramar':x.e)+(x.obs?' <span class="mut">'+esc(x.obs)+'</span>':'');
+const isP=()=>/^P\d/.test(S.role),kind=()=>isP()?'poli':S.role,canClose=()=>isP()||S.role==='admin';
+const tbl=(h,rows)=>'<table><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'</tr>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</table>';
+const detail=x=>S.role==='admin'||S.role==='analista'||(isP()&&x.p===S.role)||(S.role==='th'&&x.t==='Preempleo')||(S.role==='lider'&&x.l==='Líder A');
+function vis(){let t=S.tests.slice();const r=S.role;if(r==='th')t=t.filter(x=>x.t==='Preempleo'&&x.e==='Realizada');else if(isP())t=t.filter(x=>x.p===r);else if(r==='lider')t=[];return t.sort((a,b)=>a.f.localeCompare(b.f));}
+function vrows(){const last={};S.tests.filter(x=>x.e==='Realizada').forEach(x=>{if(!last[x.doc]||x.f>last[x.doc].f)last[x.doc]=x;});
+return Object.values(last).map(x=>{const nx=addM(x.f,x.r==='Inconcluso'?3:x.t==='Preempleo'?6:12);return{x,nx,d:dd(nx,TODAY)};}).sort((a,b)=>a.d-b.d);}
+const dur=(a,b)=>{const m=s=>{const q=s.split(':');return +q[0]*60+ +q[1]};return Math.max(0,m(b)-m(a))/60};
+const inW=r=>r.f>=WK0&&r.f<=WK1;
+function stats(p){const ts=S.tests.filter(x=>x.p===p),due=ts.filter(x=>x.f<=TODAY),ok=due.filter(x=>x.e==='Realizada').length,wt=ts.filter(x=>inW(x)&&(x.e==='Programada'||x.e==='Realizada'));
+const rc=['val','arq','cgm'].map(g=>S.rec[g].filter(r=>r.p===p&&inW(r)));const all=[].concat(rc[0],rc[1],rc[2]);
+return{pct:due.length?Math.round(100*ok/due.length):0,ok,n:due.length,h:wt.length*1.5+all.reduce((a,r)=>a+dur(r.ini,r.fin),0),dz:all.reduce((a,r)=>a+(+r.d||0),0)/60,pol:wt.length,v:rc[0].length,a:rc[1].length,c:rc[2].length,aus:ts.filter(x=>x.e==='Ausente'||x.e==='Suspendida').length};}
+function vDash(){const ps=isP()?[S.role]:['P1','P2','P3'],vr=vrows();let k='';
+if(!isP())k='<div class="g">'+[['Pruebas hoy',S.tests.filter(x=>x.f===TODAY&&x.e!=='Reprogramar').length],['Programadas esta semana',S.tests.filter(x=>inW(x)&&x.e==='Programada').length],['Próximas a vencer',vr.filter(o=>o.d>=0&&o.d<=30).length],['Vencidas',vr.filter(o=>o.d<0).length]].map((a,i)=>'<div class="card" style="--ac:'+['#14B8A6','#3B82F6','#F59E0B','#EF4444'][i]+'"><span class="mut"><i class="dot" style="background:'+['#14B8A6','#3B82F6','#F59E0B','#EF4444'][i]+'"></i>'+a[0]+'</span><div class="big">'+a[1]+'</div></div>').join('')+'</div>';
+return k+'<div class="g">'+ps.map(p=>{const s=stats(p);return '<div class="card" style="--ac:'+PC[p]+'"><h3><i class="dot" style="background:'+PC[p]+'"></i>'+PN[p]+'</h3><span class="mut">Zona '+ZONA[p]+' · '+CIT(p).join(', ')+'</span><div class="fm" style="margin-top:8px"><span>Cumplimiento ('+s.ok+' de '+s.n+')</span><b>'+s.pct+'%</b></div><div class="bar"><i style="width:'+s.pct+'%"></i></div>'+
+'<div class="fm"><span>Horas efectivas semana</span><b>'+s.h.toFixed(1)+' / 42 h</b></div><div class="fm"><span>Desplazamiento (no efectivo)</span><b>'+s.dz.toFixed(1)+' h</b></div>'+
+'<div class="fm"><span>Poligrafías · validaciones · arqueos · apoyos</span><b>'+s.pol+' · '+s.v+' · '+s.a+' · '+s.c+'</b></div><div class="fm"><span>Ausentes / suspendidas</span><b>'+s.aus+'</b></div>'+
+(s.h>42?pill('wa','Compensar '+(s.h-42).toFixed(1)+' h la próxima semana'):pill('ok','Dentro de las 42 h'))+'</div>';}).join('')+'</div>';}
+function vCal(){const p=isP()?S.role:S.cp,mon=addD(WK0,7*S.wk),days=[0,1,2,3,4,5].map(i=>addD(mon,i)),cn=S.role==='admin'||S.role==='th';
+const tabs=isP()?'':'<div class="tb">'+['P1','P2','P3'].map(q=>'<button type="button" data-act="cp" data-p="'+q+'"'+(q===p?' class="on"':'')+'>'+PN[q]+'</button>').join('')+'</div>';
+return tabs+'<div class="tb"><button type="button" data-act="wk" data-n="-1" aria-label="Semana anterior">‹</button><button type="button" data-act="wk" data-n="0">Hoy</button><button type="button" data-act="wk" data-n="1" aria-label="Semana siguiente">›</button><b>'+fmt(days[0])+' – '+fmt(days[5])+'</b><span class="mut">'+PN[p]+' · Zona '+ZONA[p]+' · '+CIT(p).join(', ')+'</span></div>'+
+'<div class="card sc"><table class="ct"><tr><th></th>'+days.map((d,i)=>'<th'+(d===TODAY?' class="hoy"':'')+'>'+DN[i]+' '+D(d).getDate()+'</th>').join('')+'</tr>'+
+SLOTS.map(h=>'<tr><td class="t">'+h+'</td>'+days.map(d=>{const x=S.tests.find(t=>t.p===p&&t.f===d&&t.h===h&&t.e!=='Reprogramar');
+if(x)return '<td><div class="ev '+(detail(x)?(x.e==='Programada'||x.e==='Realizada'?x.e:'x'):'o')+'">'+(detail(x)?esc(x.n)+'<br>'+x.t+' · '+x.ciudad:'Ocupado')+'</div></td>';
+return '<td>'+(cn&&d>=TODAY?'<button type="button" class="add" data-act="cell" data-d="'+d+'" data-h="'+h+'" data-p="'+p+'" aria-label="Agendar '+h+'">+</button>':'')+'</td>';}).join('')+'</tr>').join('')+'</table></div><p class="mut">5 espacios diarios por poligrafista. '+(cn?'Toca «+» para agendar en ese horario.':'')+'</p>';}
+function vProg(){const F=S.form;if(S.role==='th')F.tipo='Preempleo';const p=CITY[F.ciudad],busy=h=>S.tests.some(x=>x.p===p&&x.f===F.f&&x.h===h&&x.e!=='Reprogramar');
+const o=(a,v)=>a.map(z=>'<option'+(z===v?' selected':'')+'>'+z+'</option>').join('');
+return (S.queue.length?'<div class="card"><h3>Vencimientos por programar ('+S.queue.length+')</h3>'+S.queue.map((q,i)=>'<div class="fm"><span>'+esc(q.n)+' · '+esc(q.cargo)+' · vence '+fmt(q.nx)+'</span><button class="btn sm" type="button" data-act="qload" data-i="'+i+'">Cargar</button></div>').join('')+'</div>':'')+'<div class="card"><h3>Nueva programación</h3><div class="f"><label>Tipo de prueba<select data-f="tipo"'+(S.role==='th'?' disabled':'')+'>'+o(['Preempleo','Control','Específica'],F.tipo)+'</select></label>'+
+'<label>Nombre del evaluado<input data-f="n" value="'+esc(F.n)+'"></label><label>Documento<input data-f="doc" value="'+esc(F.doc)+'"></label><label>Cargo<input data-f="cargo" value="'+esc(F.cargo)+'"></label>'+
+'<label>Líder (recibe confirmación)<select data-f="l">'+o(['Líder A','Líder B','Líder C'],F.l)+'</select></label><label>Ciudad<select data-f="ciudad">'+o(Object.keys(CITY),F.ciudad)+'</select></label>'+
+'<label>Fecha<input type="date" data-f="f" min="'+TODAY+'" value="'+F.f+'"></label><label>Admisión (PDF)<input type="file" data-f="adm"></label></div>'+
+'<p class="note" style="margin:12px 0 0">Asignado automáticamente: '+PN[p]+' · Zona '+ZONA[p]+'</p><div class="sl">'+SLOTS.map(h=>'<button type="button" data-act="slot" data-h="'+h+'"'+(busy(h)?' disabled':'')+(F.h===h?' class="sel"':'')+'>'+h+(busy(h)?' · ocupado':'')+'</button>').join('')+'</div>'+
+'<button class="btn" type="button" data-act="prog" style="margin-top:0">Confirmar agenda</button></div>'+
+(S.mails.length?'<div class="card"><h3>Correos enviados (simulado)</h3>'+S.mails.map(m=>'<div class="fm"><span>'+m+'</span></div>').join('')+'</div>':'');}
+function vRes(){const th=S.role==='th',cc=canClose();let pn='';
+if(S.closing){const x=S.tests.find(t=>t.id===S.closing),c=S.cl;pn='<div class="card"><h3>Cerrar prueba · '+esc(x.n)+'</h3><div class="f"><label>Resultado<select data-c="r">'+['Aprobó','No aprobó','Inconcluso','Reprogramar','Ausente','Suspendida'].map(z=>'<option'+(z===c.r?' selected':'')+'>'+z+'</option>').join('')+'</select></label>'+
+'<label>Observaciones'+(c.r==='Suspendida'?' (obligatorias)':'')+'<textarea data-c="obs" rows="3">'+esc(c.obs)+'</textarea></label><label>Admisión (PDF)<input type="file" data-c="adm"></label></div><button class="btn" type="button" data-act="cerrar">Guardar</button> <button class="btn sm" type="button" data-act="cancelc">Cancelar</button></div>';}
+const h=['Fecha','Evaluado','Documento','Tipo','Estado / resultado','Admisión','Informe'];if(cc)h.push('');
+return pn+'<div class="card sc">'+tbl(h,vis().map(x=>{const r=[fmt(x.f),esc(x.n),x.doc,x.t,rp(x),x.adm?'<a href="#">'+esc(x.adm)+'</a>':pill('wa','Sin admisión'),x.e==='Realizada'?'<a href="#">Informe PDF</a>':'—'];
+if(cc)r.push(x.e==='Programada'&&(S.role==='admin'||x.p===S.role)?'<button class="btn sm" type="button" data-act="close" data-id="'+x.id+'">Cerrar prueba</button>':'');return r;}))+'</div>'+(th?'<p class="mut">Solo preempleo realizadas.</p>':'');}
+const vst=o=>o.d<0?'bad':o.d<=30?'wa':'ok';
+function ql(i){const q=S.queue[i];if(!q)return;Object.assign(S.form,{tipo:'Control',n:q.n,doc:q.doc,cargo:q.cargo,l:q.l,ciudad:q.ciudad,f:q.nx>=TODAY?q.nx:TODAY,h:''});}
+function vVenc(){const all=vrows(),f=S.vf,rows=all.filter(o=>f==='all'||vst(o)===f),n=rows.filter(o=>S.sel[o.x.doc]).length,ad=S.role==='admin';
+const chip=(k,t)=>'<button type="button" data-act="vf" data-k="'+k+'"'+(f===k?' class="on"':'')+'>'+t+'</button>';
+return '<div class="tb">'+chip('all','Todas · '+all.length)+chip('bad','Vencidas · '+all.filter(o=>vst(o)==='bad').length)+chip('wa','Próximas a vencer · '+all.filter(o=>vst(o)==='wa').length)+chip('ok','Vigentes · '+all.filter(o=>vst(o)==='ok').length)+'</div>'+
+'<div class="tb">'+(ad?'<button class="btn sm" type="button" data-act="toprog"'+(n?'':' disabled')+'>Programar seleccionados ('+n+')</button>':'')+'<button class="btn sm" type="button" data-act="xls">Descargar Excel ('+(n||rows.length)+')</button><span class="mut">Sin selección se descargan todos los visibles, ordenados por líder y con una columna para su disponibilidad.</span></div>'+
+'<div class="card sc">'+tbl(['<input type="checkbox" class="chk" data-s="all" aria-label="Seleccionar todos"'+(rows.length&&n===rows.length?' checked':'')+'>','Funcionario','Líder','Cargo','Última prueba','Resultado','Próximo vencimiento','Estado'],rows.map(o=>['<input type="checkbox" class="chk" data-s="'+esc(o.x.doc)+'" aria-label="Seleccionar '+esc(o.x.n)+'"'+(S.sel[o.x.doc]?' checked':'')+'>',esc(o.x.n),o.x.l,esc(o.x.cargo),o.x.t+' · '+fmt(o.x.f),rp(o.x),fmt(o.nx),o.d<0?pill('bad','Vencida'):o.d<=30?pill('wa','Vence en '+o.d+' días'):pill('ok','Vigente')]))+'</div><p class="mut">Preempleo → control a los 6 meses; control → anual; inconcluso → se repite a los 3 meses. Hoy: 27 oct 2026.</p>';}
+function vVencOld(){return '<div class="card sc">'+tbl(['Funcionario','Cargo','Última prueba','Resultado','Próximo vencimiento','Estado'],vrows().map(o=>[esc(o.x.n),esc(o.x.cargo),o.x.t+' · '+fmt(o.x.f),rp(o.x),fmt(o.nx),o.d<0?pill('bad','Vencida'):o.d<=30?pill('wa','Vence en '+o.d+' días'):pill('ok','Vigente')]))+'</div><p class="mut">Preempleo → control a los 6 meses; control → anual; inconcluso → se repite a los 3 meses. Hoy: 27 oct 2026.</p>';}
+function fld(g,a){const v=S.rf[g][a[0]]||'',id='data-g="'+g+'" data-f="'+a[0]+'"';let c;
+if(a[2]==='area')c='<textarea '+id+' rows="3">'+esc(v)+'</textarea>';else if(a[2]==='file')c='<input type="file" '+id+'>';else if(a[2]==='sel')c='<select '+id+'>'+a[3].map(o=>'<option'+(o===v?' selected':'')+'>'+o+'</option>').join('')+'</select>';else c='<input type="'+a[2]+'" '+id+' value="'+esc(v)+'">';
+return '<label>'+a[1]+c+'</label>';}
+function vRec(g){const ad=S.role==='admin',fl=(ad?[['p','Poligrafista','sel',Object.values(PN)]]:[]).concat(FC[g]);
+const rows=S.rec[g].filter(r=>!isP()||r.p===S.role).sort((a,b)=>b.f.localeCompare(a.f));
+return (canClose()?'<div class="card"><h3>Nuevo registro</h3><div class="f">'+fl.map(a=>fld(g,a)).join('')+'</div><p class="mut">El desplazamiento se reporta, pero no cuenta como tiempo efectivo.</p><button class="btn" type="button" data-act="rec" data-g="'+g+'" style="margin-top:0">Guardar</button></div>':'')+
+'<div class="card sc"><h3>Registros</h3>'+tbl(COLS[g].map(c=>c[0]),rows.map(r=>COLS[g].map(c=>c[1](r))))+'</div>';}
+function vForm(){const L=[['Cajero','Guion de entrevista','Preempleo'],['Cajero','Matriz de evaluación','Preempleo'],['Analista','Guion de entrevista','Preempleo'],['Tesorero','Guion de entrevista','Preempleo'],['Tesorero','Guía de seguimiento','Control'],['Director de oficina','Guion de entrevista','Preempleo'],['Director de oficina','Informe de control','Control']];
+return '<div class="g">'+[...new Set(L.map(f=>f[0]))].map(c=>'<div class="card"><h3>'+c+'</h3>'+L.filter(f=>f[0]===c).map(f=>'<div class="fm"><span>'+f[1]+' '+pill(f[2]==='Preempleo'?'ok':'wa',f[2])+'</span><a href="#">Descargar</a></div>').join('')+'</div>').join('')+'</div>';}
+function vUsr(){return '<div class="card sc">'+tbl(['Rol','Programar','Resultados','Validaciones / arqueos / CGM','Formatos','Dashboard'],[['Administrador','Todo','Todo','Editar','Sí','Sí'],['Analista','No','Ver y validar','Ver','Sí','Sí'],['Poligrafista','No','Cierra las suyas','Editar propios','Sí','Propio'],['Talento Humano','Solo preempleo','Preempleo realizadas + admisión','Sin acceso','Sin acceso','No'],['Líder','No','Sin acceso','Sin acceso','Sin acceso','Solo su calendario']])+'</div>';}
+function dayAct(p,d){const R=[];S.tests.filter(x=>x.p===p&&x.f===d&&x.e!=='Reprogramar').forEach(x=>R.push({k:'t',t:x.t,nm:x.n,ini:pad(x.h),fin:'',act:'Poligrafía de '+x.t.toLowerCase(),det:x.n+' · '+x.ciudad+' · '+x.e,h:1.5,dz:0}));
+[['val','Validación de cuentas'],['arq','Arqueo'],['cgm','Apoyo CGM']].forEach(g=>S.rec[g[0]].filter(r=>r.p===p&&r.f===d).forEach(r=>R.push({k:g[0],nm:r.o||r.tipo||'',ini:pad(r.ini),fin:pad(r.fin),act:g[1],det:r.o||r.tipo||'',h:dur(r.ini,r.fin),dz:+r.d||0})));return R.sort((a,b)=>a.ini.localeCompare(b.ini));}
+function msgRes(R){const G=[['Poligrafías Control',r=>r.k==='t'&&r.t==='Control'],['Preempleo',r=>r.k==='t'&&r.t==='Preempleo'],['Poligrafías Específicas',r=>r.k==='t'&&r.t==='Específica'],['Validaciones de cuentas',r=>r.k==='val'],['Arqueos',r=>r.k==='arq'],['Apoyos CGM',r=>r.k==='cgm']],out=['Resumen de actividades'];
+G.forEach(g=>{const L=R.filter(g[1]);if(L.length){out.push('');out.push(L.length+' '+g[0]);L.forEach(r=>out.push(String(r.nm).toUpperCase()));}});if(out.length===1)out.push('','Sin actividades');return out;}
+async function rcopy(){const q=isP()?S.role:S.rs;try{await navigator.clipboard.writeText(msgRes(dayAct(q,S.dd)).join(String.fromCharCode(10)));S.msg='Mensaje copiado; pégalo en el chat.';}catch(e){S.msg='No se pudo copiar automáticamente; selecciona el texto y cópialo.';}render();}
+function dayRows(d){return ['P1','P2','P3'].map(p=>({p,rows:SLOTS.map(h=>({h,x:S.tests.find(t=>t.p===p&&t.f===d&&t.h===h&&t.e!=='Reprogramar')}))}));}
+async function saveX(name,sh,H,A){try{const dl=await dlh();if(!dl){S.msg='La descarga no está disponible en esta vista.';render();return;}
+let data;if(window.XLSX){const ws=XLSX.utils.aoa_to_sheet([H].concat(A));ws['!cols']=H.map(()=>({wch:22}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,sh);data=XLSX.write(wb,{bookType:'xlsx',type:'array'});name+='.xlsx';}
+else{data=String.fromCharCode(65279)+[H].concat(A).map(r=>r.map(c=>'"'+String(c).split('"').join('""')+'"').join(';')).join(String.fromCharCode(10));name+='.csv';}
+await dl.save({filename:name,data:data});S.msg='Archivo listo: '+name;}catch(err){S.msg=err&&err.code==='declined'?'Descarga cancelada.':'No se pudo descargar el archivo en esta vista.';}render();}
+function dxls(){const A=[];dayRows(S.dd).forEach(g=>g.rows.forEach(r=>{const x=r.x;A.push([PN[g.p],ZONA[g.p],r.h,x?x.n:'Libre',x?x.doc:'',x?x.cargo:'',x?x.t:'',x?x.ciudad:'',x?x.l:'',x?x.e:'']);}));
+saveX('programacion_diaria_'+S.dd,'Programación',['Poligrafista','Zona','Horario','Evaluado','Documento','Cargo','Tipo','Ciudad','Líder','Estado'],A);}
+function rxls(){const q=isP()?S.role:S.rs;saveX('resumen_'+q+'_'+S.dd,'Resumen',['Fecha','Poligrafista','Actividad','Detalle','Inicio','Fin','Horas efectivas','Desplazamiento (min, no efectivo)'],dayAct(q,S.dd).map(r=>[S.dd,PN[q],r.act,r.det,r.ini,r.fin,r.h,r.dz]));}
+function vDia(){const d=S.dd,G=dayRows(d),n=G.reduce((a,g)=>a+g.rows.filter(r=>r.x).length,0);
+return '<div class="tb"><label class="mut">Fecha <input type="date" data-d="dd" value="'+d+'"></label><button class="btn sm" type="button" data-act="dxls">Descargar Excel (3 poligrafistas)</button><button class="btn sm" type="button" data-act="dnot">Notificar al administrador</button><span class="mut">'+n+' pruebas programadas ese día</span></div>'+
+'<div class="g">'+G.map(g=>'<div class="card" style="--ac:'+PC[g.p]+'"><h3><i class="dot" style="background:'+PC[g.p]+'"></i>'+PN[g.p]+' · Zona '+ZONA[g.p]+'</h3>'+g.rows.map(r=>'<div class="fm"><span>'+r.h+'</span><span>'+(r.x?esc(r.x.n)+' · '+r.x.t+' · '+r.x.ciudad:'<span class="mut">Libre</span>')+'</span></div>').join('')+'</div>').join('')+'</div>';}
+function vResumen(){const p=isP()?S.role:S.rs,d=S.dd,R=dayAct(p,d),cn=(k,t)=>R.filter(r=>r.k===k&&(!t||r.t===t)).length;
+const I=[['Control',cn('t','Control'),'#3B82F6'],['Preempleo',cn('t','Preempleo'),'#F59E0B'],['Específicas',cn('t','Específica'),'#8B5CF6'],['Validaciones',cn('val'),'#06B6D4'],['Arqueos',cn('arq'),'#F97316'],['Apoyo CGM',cn('cgm'),'#6366F1']];
+const hh=R.reduce((a,r)=>a+r.h,0),dz=R.reduce((a,r)=>a+r.dz,0)/60,sm=I.filter(i=>i[1]).map(i=>i[1]+' '+i[0].toLowerCase()).join(' + ')||'Sin actividades';
+return '<div class="tb"><label class="mut">Fecha <input type="date" data-d="dd" value="'+d+'"></label>'+(isP()?'':['P1','P2','P3'].map(q=>'<button type="button" data-act="rs" data-p="'+q+'"'+(q===p?' class="on"':'')+'>'+PN[q]+'</button>').join(''))+(canClose()?'<button class="btn sm" type="button" data-act="rsend">Enviar resumen del día</button>':'')+'<button class="btn sm" type="button" data-act="rxls">Descargar Excel</button></div>'+
+'<div class="g">'+I.map(i=>'<div class="card" style="--ac:'+i[2]+'"><span class="mut"><i class="dot" style="background:'+i[2]+'"></i>'+i[0]+'</span><div class="big">'+i[1]+'</div></div>').join('')+'</div>'+
+'<div class="card"><h3>'+PN[p]+' · '+fmt(d)+'</h3><div class="fm"><span>Combinación del día</span><b>'+sm+'</b></div><div class="fm"><span>Horas efectivas</span><b>'+hh.toFixed(1)+' h</b></div><div class="fm"><span>Desplazamiento (no efectivo)</span><b>'+dz.toFixed(1)+' h</b></div></div>'+
+'<div class="card"><h3>Mensaje para enviar</h3><div style="line-height:1.6">'+msgRes(R).map(esc).join('<br>')+'</div><button class="btn sm" type="button" data-act="rcopy" style="margin-top:10px">Copiar mensaje</button></div>'+'<div class="card sc"><h3>Detalle</h3>'+tbl(['Horario','Actividad','Detalle','Horas'],R.map(r=>[r.ini+(r.fin?'–'+r.fin:''),r.act,esc(r.det),r.h.toFixed(1)+' h']))+'</div>';}
+function render(){const m=MENU[kind()];if(!m.includes(S.view))S.view=m[0];
+document.getElementById('sb').innerHTML='<h1>Suite de Poligrafía</h1>'+m.map(v=>'<button type="button" data-act="nav" data-v="'+v+'"'+(v===S.view?' class="on"':'')+'>'+dot(v)+LBL[v]+'</button>').join('')+'<label>Ver como (demo)<select id="role">'+ROLES.map(r=>'<option value="'+r[0]+'"'+(r[0]===S.role?' selected':'')+'>'+r[1]+'</option>').join('')+'</select></label>';
+const v=S.view,V=v==='dash'?vDash():v==='cal'?vCal():v==='prog'?vProg():v==='res'?vRes():v==='venc'?vVenc():v==='form'?vForm():v==='usr'?vUsr():v==='diaria'?vDia():v==='resumen'?vResumen():vRec(v);
+document.getElementById('app').style.setProperty('--mc',MC[v]);document.getElementById('app').innerHTML='<div><h2>'+dot(v)+LBL[v]+'</h2><span class="mut">'+INFO[kind()]+'</span></div>'+(S.msg?'<div class="note">'+S.msg+'</div>':'')+V;}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,d=b.dataset;
+if(a==='nav'){S.view=d.v;S.msg='';S.closing=0;}
+else if(a==='slot')S.form.h=d.h;
+else if(a==='wk')S.wk=d.n==='0'?0:S.wk+ +d.n;
+else if(a==='cp')S.cp=d.p;
+else if(a==='cell'){S.form.f=d.d;S.form.h=d.h;S.form.ciudad=CIT(d.p)[0];S.view='prog';S.msg='';}
+else if(a==='close'){S.closing=+d.id;S.cl={r:'Aprobó',obs:'',adm:''};S.msg='';}
+else if(a==='cancelc')S.closing=0;
+else if(a==='vf')S.vf=d.k;
+else if(a==='toprog'){S.queue=vrows().filter(o=>S.sel[o.x.doc]).map(o=>({n:o.x.n,doc:o.x.doc,cargo:o.x.cargo,l:o.x.l,ciudad:o.x.ciudad,nx:o.nx}));S.sel={};S.view='prog';S.msg='';ql(0);}
+else if(a==='qload')ql(+d.i);
+else if(a==='xls'){xls();return;}
+else if(a==='dxls'){dxls();return;}
+else if(a==='rxls'){rxls();return;}
+else if(a==='rcopy'){rcopy();return;}
+else if(a==='rs')S.rs=d.p;
+else if(a==='dnot'){const n=S.tests.filter(x=>x.f===S.dd&&x.e!=='Reprogramar').length;S.msg='Notificación enviada al administrador (simulado): programación del '+fmt(S.dd)+' de los 3 poligrafistas, '+n+' pruebas, con el Excel adjunto.';}
+else if(a==='rsend'){const q=isP()?S.role:S.rs;S.msg='Resumen de '+PN[q]+' del '+fmt(S.dd)+' enviado al administrador y al analista (simulado): '+dayAct(q,S.dd).length+' actividades.';}
+else if(a==='cerrar'){const x=S.tests.find(t=>t.id===S.closing),c=S.cl;
+if(c.r==='Suspendida'&&!c.obs.trim())S.msg='Escribe las observaciones para suspender la prueba.';
+else{x.obs=c.obs.trim();if(c.adm)x.adm=c.adm;if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)){x.e='Realizada';x.r=c.r;}else{x.e=c.r;x.r='';}
+S.msg='Prueba cerrada como «'+c.r+'».'+(c.r==='Reprogramar'?' El horario quedó libre en el calendario.':'');S.closing=0;}}
+else if(a==='prog'){const F=S.form;if(!F.n.trim()||!F.h){S.msg='Falta el nombre del evaluado o elegir un horario.';}
+else{S.tests.push({id:S.tests.length+1,n:F.n.trim(),doc:F.doc||'—',cargo:F.cargo||'—',ciudad:F.ciudad,f:F.f,h:F.h,t:F.tipo,p:CITY[F.ciudad],e:'Programada',r:'',l:F.l,adm:F.adm,obs:''});
+S.mails.unshift('Para: '+F.l+' y Talento Humano · Confirmación: '+esc(F.n.trim())+' · '+fmt(F.f)+' '+F.h+' · '+F.ciudad+' · Adjuntos: autorización y PDF de recomendaciones · Evento creado en el calendario');
+S.msg='Prueba agendada con '+PN[CITY[F.ciudad]]+'. Ya aparece en el calendario.';S.queue=S.queue.filter(q=>q.doc!==F.doc);F.n='';F.doc='';F.cargo='';F.h='';F.adm='';ql(0);}}
+else if(a==='rec'){const g=d.g,R=S.rf[g],o={};if(!R.f||!R.ini||!R.fin){S.msg='Faltan la fecha o las horas de inicio y fin.';render();return;}
+FC[g].forEach(z=>{o[z[0]]=R[z[0]]||(z[2]==='sel'?z[3][0]:'');});o.p=isP()?S.role:(Object.keys(PN).find(k=>PN[k]===R.p)||'P1');
+S.rec[g].push(o);S.rf[g]={f:TODAY};S.msg='Registro guardado; las horas ya cuentan en el dashboard de cumplimiento.';}
+render();});
+function setv(e){const t=e.target,d=t.dataset;if(d&&d.s!==undefined){if(e.type==='change'){const vs=vrows().filter(o=>S.vf==='all'||vst(o)===S.vf);if(d.s==='all')vs.forEach(o=>{S.sel[o.x.doc]=t.checked});else S.sel[d.s]=t.checked;render();}return;}if(d&&d.d){if(e.type==='change'&&t.value){S[d.d]=t.value;render();}return;}if(t.id==='role'){S.role=t.value;S.msg='';S.closing=0;render();return;}if(!d)return;
+const v=t.type==='file'?(t.files[0]?t.files[0].name:''):t.value;
+if(d.g){S.rf[d.g][d.f]=v;return;}
+if(d.c){S.cl[d.c]=v;if(d.c==='r'&&e.type==='change')render();return;}
+if(d.f){S.form[d.f]=v;if(e.type==='change'&&['ciudad','f','tipo'].includes(d.f)){S.form.h='';render();}}}
+document.addEventListener('input',setv);document.addEventListener('change',setv);
+async function xls(){const all=vrows().filter(o=>S.vf==='all'||vst(o)===S.vf),pick=all.filter(o=>S.sel[o.x.doc]),rows=(pick.length?pick:all).slice().sort((a,b)=>a.x.l.localeCompare(b.x.l)||a.d-b.d);
+const H=['Líder','Funcionario','Documento','Cargo','Ciudad','Zona','Poligrafista','Última prueba','Resultado','Próximo vencimiento','Estado','Disponibilidad del líder (fecha y hora)','Observaciones'];
+const A=rows.map(o=>[o.x.l,o.x.n,o.x.doc,o.x.cargo,o.x.ciudad,ZONA[o.x.p],PN[o.x.p],o.x.t+' · '+o.x.f,o.x.r,o.nx,o.d<0?'Vencida':o.d<=30?'Próxima a vencer':'Vigente','','']);
+try{const dl=await dlh();if(!dl){S.msg='La descarga no está disponible en esta vista.';render();return;}
+let name='vencimientos_2026-10-27',data;
+if(window.XLSX){const ws=XLSX.utils.aoa_to_sheet([H].concat(A));ws['!cols']=H.map(()=>({wch:24}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Vencimientos');data=XLSX.write(wb,{bookType:'xlsx',type:'array'});name+='.xlsx';}
+else{data=String.fromCharCode(65279)+[H].concat(A).map(r=>r.map(c=>'"'+String(c).split('"').join('""')+'"').join(';')).join(String.fromCharCode(10));name+='.csv';}
+await dl.save({filename:name,data:data});S.msg='Archivo listo: '+rows.length+' funcionarios, ordenados por líder.';}
+catch(err){S.msg=err&&err.code==='declined'?'Descarga cancelada.':'No se pudo descargar el archivo en esta vista.';}
+render();}
+render();
+</script>
+</body>
+</html>
