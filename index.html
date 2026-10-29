@@ -46,6 +46,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{text-align:left;p
 .add{width:100%;min-height:44px;border:1px dashed var(--line);background:none;color:var(--mut);border-radius:6px;cursor:pointer}
 .chk{width:20px;height:20px}.btn:disabled{opacity:.5;cursor:not-allowed}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;vertical-align:middle;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
+.lg{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;max-width:780px;margin:40px auto;width:100%}.sb .out{margin-top:6px;min-height:36px;border:1px solid #D7E0E4;border-radius:8px;color:#fff;font-size:12px;text-align:center}
 </style>
 </head>
 <body>
@@ -61,7 +62,7 @@ const MENU={admin:['dash','cal','diaria','prog','res','resumen','venc','val','ar
 const LBL={dash:'Dashboard de cumplimiento',cal:'Calendario',prog:'Programar prueba',res:'Resultados',venc:'Vencimientos',val:'Validaciones de cuentas',arq:'Arqueos',cgm:'Apoyo CGM',form:'Formatos de entrevista',usr:'Usuarios y roles',diaria:'Programación diaria',resumen:'Resumen de actividades'};
 const INFO={admin:'Ve y programa todo, cierra pruebas y registra validaciones, arqueos y apoyos.',analista:'Consulta y valida resultados, vencimientos, informes y formatos; saca la programación diaria de los tres poligrafistas en un solo archivo y notifica al administrador; no programa.',poli:'Ve y cierra solo sus pruebas; registra validaciones, arqueos y apoyos; envía su resumen diario; usa los formatos.',th:'Programa preempleo y consulta solo las preempleo realizadas: resultado, admisión e informe. Sin formatos ni otras pruebas.',lider:'Solo ve su agenda y recibe los correos de confirmación; lo demás aparece como «Ocupado».'};
 const T=(n,doc,cargo,ciudad,f,h,t,e,r,l,adm)=>({id:0,n,doc,cargo,ciudad,f,h,t,p:CITY[ciudad],e,r,l,adm:adm||'',obs:''});
-const S={role:'admin',view:'dash',msg:'',mails:[],wk:0,cp:'P1',closing:0,cl:{},sel:{},vf:'all',queue:[],dd:TODAY,rs:'P1',
+const S={role:'admin',view:'dash',msg:'',mails:[],wk:0,cp:'P1',closing:0,cl:{},sel:{},vf:'all',queue:[],dd:TODAY,rs:'P1',user:null,lf:{u:'',p:'',e:''},
 form:{tipo:'Preempleo',n:'',doc:'',cargo:'',l:'Líder A',ciudad:'Envigado',f:'2026-10-29',h:'',adm:''},
 rf:{val:{f:TODAY},arq:{f:TODAY},cgm:{f:TODAY}},
 tests:[T('Funcionario 11','00.000.011','Cajero','Medellín','2026-05-12','9:30','Preempleo','Realizada','Aprobó','Líder A','admision_f11.pdf'),
@@ -112,9 +113,23 @@ const inW=r=>r.f>=WK0&&r.f<=WK1;
 function stats(p){const ts=S.tests.filter(x=>x.p===p),due=ts.filter(x=>x.f<=TODAY),ok=due.filter(x=>x.e==='Realizada').length,wt=ts.filter(x=>inW(x)&&(x.e==='Programada'||x.e==='Realizada'));
 const rc=['val','arq','cgm'].map(g=>S.rec[g].filter(r=>r.p===p&&inW(r)));const all=[].concat(rc[0],rc[1],rc[2]);
 return{pct:due.length?Math.round(100*ok/due.length):0,ok,n:due.length,h:wt.length*1.5+all.reduce((a,r)=>a+dur(r.ini,r.fin),0),dz:all.reduce((a,r)=>a+(+r.d||0),0)/60,pol:wt.length,v:rc[0].length,a:rc[1].length,c:rc[2].length,aus:ts.filter(x=>x.e==='Ausente'||x.e==='Suspendida').length};}
+function chartBars(it,max,lim,unit){const W=360,H=190,L=30,B=28,T=18,n=it.length,step=(W-L-8)/n,bw=Math.min(54,step-16),y=v=>T+(H-T-B)*(1-Math.min(v,max)/max);
+let o='<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="Gráfica de barras">';
+[0,.5,1].forEach(f=>{const v=max*f,yy=y(v);o+='<line x1="'+L+'" x2="'+(W-4)+'" y1="'+yy+'" y2="'+yy+'" stroke="var(--line)"/><text x="'+(L-4)+'" y="'+(yy+4)+'" text-anchor="end" font-size="10" fill="var(--mut)">'+Math.round(v)+'</text>';});
+it.forEach((d,i)=>{const x=L+step*i+(step-bw)/2,yy=y(d.v);o+='<rect x="'+x+'" y="'+yy+'" width="'+bw+'" height="'+Math.max(0,H-B-yy)+'" rx="4" fill="'+d.c+'"><title>'+esc(d.l)+': '+d.v+unit+'</title></rect><text x="'+(x+bw/2)+'" y="'+(yy-4)+'" text-anchor="middle" font-size="11" fill="var(--ink)">'+d.v+'</text><text x="'+(x+bw/2)+'" y="'+(H-10)+'" text-anchor="middle" font-size="10" fill="var(--mut)">'+esc(d.l)+'</text>';});
+if(lim){const yy=y(lim);o+='<line x1="'+L+'" x2="'+(W-4)+'" y1="'+yy+'" y2="'+yy+'" stroke="#EF4444" stroke-dasharray="4 3"/><text x="'+(W-4)+'" y="'+(yy-4)+'" text-anchor="end" font-size="10" fill="var(--bad)">Límite '+lim+unit+'</text>';}
+return o+'</svg>';}
+function gauge(pct,c){const C=2*Math.PI*52;return '<svg viewBox="0 0 140 140" width="140" role="img" aria-label="Cumplimiento '+pct+'%"><circle cx="70" cy="70" r="52" fill="none" stroke="var(--line)" stroke-width="14"/><circle cx="70" cy="70" r="52" fill="none" stroke="'+c+'" stroke-width="14" stroke-linecap="round" stroke-dasharray="'+(C*pct/100)+' '+C+'" transform="rotate(-90 70 70)"/><text x="70" y="77" text-anchor="middle" font-size="24" font-weight="700" fill="var(--ink)">'+pct+'%</text></svg>';}
+function mix(p){const ts=S.tests.filter(x=>inW(x)&&x.e!=='Reprogramar'&&(!p||x.p===p)),rc=g=>S.rec[g].filter(r=>inW(r)&&(!p||r.p===p)).length,tc=t=>ts.filter(x=>x.t===t).length;
+return [{l:'Control',v:tc('Control'),c:'#3B82F6'},{l:'Preempleo',v:tc('Preempleo'),c:'#F59E0B'},{l:'Específ.',v:tc('Específica'),c:'#8B5CF6'},{l:'Valid.',v:rc('val'),c:'#06B6D4'},{l:'Arqueos',v:rc('arq'),c:'#F97316'},{l:'CGM',v:rc('cgm'),c:'#6366F1'}];}
+function vCharts(ps){const poli=ps.length===1,p=poli?ps[0]:null,days=[0,1,2,3,4,5].map(i=>({l:DN[i],v:S.tests.filter(x=>x.f===addD(WK0,i)&&(!p||x.p===p)&&x.e!=='Reprogramar').length,c:'#3B82F6'})),dm=Math.max(4,...days.map(d=>d.v)),mx=mix(p),mm=Math.max(4,...mx.map(d=>d.v));
+const card=(t,b,c)=>'<div class="card" style="--ac:'+c+'"><h3>'+t+'</h3>'+b+'</div>';
+if(poli){const s=stats(p);return '<div class="g">'+card('Mi cumplimiento',gauge(s.pct,PC[p])+'<p class="mut">'+s.ok+' de '+s.n+' pruebas realizadas hasta hoy</p>',PC[p])+card('Mis pruebas por día',chartBars(days,dm,0,''),'#3B82F6')+card('Mi actividad de la semana',chartBars(mx,mm,0,''),'#EC4899')+'</div>';}
+const st=ps.map(q=>stats(q));
+return '<div class="g">'+card('Cumplimiento por poligrafista (%)',chartBars(ps.map((q,i)=>({l:'Polig. '+q[1],v:st[i].pct,c:PC[q]})),100,0,'%'),'#14B8A6')+card('Horas efectivas de la semana',chartBars(ps.map((q,i)=>({l:'Polig. '+q[1],v:+st[i].h.toFixed(1),c:PC[q]})),Math.max(48,Math.ceil(Math.max(...st.map(x=>x.h)))),42,' h'),'#F59E0B')+card('Pruebas por día (equipo)',chartBars(days,dm,0,''),'#3B82F6')+card('Actividad de la semana por tipo',chartBars(mx,mm,0,''),'#EC4899')+'</div>';}
 function vDash(){const ps=isP()?[S.role]:['P1','P2','P3'],vr=vrows();let k='';
 if(!isP())k='<div class="g">'+[['Pruebas hoy',S.tests.filter(x=>x.f===TODAY&&x.e!=='Reprogramar').length],['Programadas esta semana',S.tests.filter(x=>inW(x)&&x.e==='Programada').length],['Próximas a vencer',vr.filter(o=>o.d>=0&&o.d<=30).length],['Vencidas',vr.filter(o=>o.d<0).length]].map((a,i)=>'<div class="card" style="--ac:'+['#14B8A6','#3B82F6','#F59E0B','#EF4444'][i]+'"><span class="mut"><i class="dot" style="background:'+['#14B8A6','#3B82F6','#F59E0B','#EF4444'][i]+'"></i>'+a[0]+'</span><div class="big">'+a[1]+'</div></div>').join('')+'</div>';
-return k+'<div class="g">'+ps.map(p=>{const s=stats(p);return '<div class="card" style="--ac:'+PC[p]+'"><h3><i class="dot" style="background:'+PC[p]+'"></i>'+PN[p]+'</h3><span class="mut">Zona '+ZONA[p]+' · '+CIT(p).join(', ')+'</span><div class="fm" style="margin-top:8px"><span>Cumplimiento ('+s.ok+' de '+s.n+')</span><b>'+s.pct+'%</b></div><div class="bar"><i style="width:'+s.pct+'%"></i></div>'+
+return k+vCharts(ps)+'<div class="g">'+ps.map(p=>{const s=stats(p);return '<div class="card" style="--ac:'+PC[p]+'"><h3><i class="dot" style="background:'+PC[p]+'"></i>'+PN[p]+'</h3><span class="mut">Zona '+ZONA[p]+' · '+CIT(p).join(', ')+'</span><div class="fm" style="margin-top:8px"><span>Cumplimiento ('+s.ok+' de '+s.n+')</span><b>'+s.pct+'%</b></div><div class="bar"><i style="width:'+s.pct+'%"></i></div>'+
 '<div class="fm"><span>Horas efectivas semana</span><b>'+s.h.toFixed(1)+' / 42 h</b></div><div class="fm"><span>Desplazamiento (no efectivo)</span><b>'+s.dz.toFixed(1)+' h</b></div>'+
 '<div class="fm"><span>Poligrafías · validaciones · arqueos · apoyos</span><b>'+s.pol+' · '+s.v+' · '+s.a+' · '+s.c+'</b></div><div class="fm"><span>Ausentes / suspendidas</span><b>'+s.aus+'</b></div>'+
 (s.h>42?pill('wa','Compensar '+(s.h-42).toFixed(1)+' h la próxima semana'):pill('ok','Dentro de las 42 h'))+'</div>';}).join('')+'</div>';}
@@ -181,8 +196,12 @@ return '<div class="tb"><label class="mut">Fecha <input type="date" data-d="dd" 
 '<div class="g">'+I.map(i=>'<div class="card" style="--ac:'+i[2]+'"><span class="mut"><i class="dot" style="background:'+i[2]+'"></i>'+i[0]+'</span><div class="big">'+i[1]+'</div></div>').join('')+'</div>'+
 '<div class="card"><h3>'+PN[p]+' · '+fmt(d)+'</h3><div class="fm"><span>Combinación del día</span><b>'+sm+'</b></div><div class="fm"><span>Horas efectivas</span><b>'+hh.toFixed(1)+' h</b></div><div class="fm"><span>Desplazamiento (no efectivo)</span><b>'+dz.toFixed(1)+' h</b></div></div>'+
 '<div class="card"><h3>Mensaje para enviar</h3><div style="line-height:1.6">'+msgRes(R).map(esc).join('<br>')+'</div><button class="btn sm" type="button" data-act="rcopy" style="margin-top:10px">Copiar mensaje</button></div>'+'<div class="card sc"><h3>Detalle</h3>'+tbl(['Horario','Actividad','Detalle','Horas'],R.map(r=>[r.ini+(r.fin?'–'+r.fin:''),r.act,esc(r.det),r.h.toFixed(1)+' h']))+'</div>';}
-function render(){const m=MENU[kind()];if(!m.includes(S.view))S.view=m[0];
-document.getElementById('sb').innerHTML='<h1>Suite de Poligrafía</h1>'+m.map(v=>'<button type="button" data-act="nav" data-v="'+v+'"'+(v===S.view?' class="on"':'')+'>'+dot(v)+LBL[v]+'</button>').join('')+'<label>Ver como (demo)<select id="role">'+ROLES.map(r=>'<option value="'+r[0]+'"'+(r[0]===S.role?' selected':'')+'>'+r[1]+'</option>').join('')+'</select></label>';
+const USERS=[['administrador','Administrador','admin'],['analista','Analista','analista'],['poligrafista1','Poligrafista 1','P1'],['poligrafista2','Poligrafista 2','P2'],['poligrafista3','Poligrafista 3','P3'],['talentohumano','Talento Humano','th'],['lider','Líder A','lider']],PASS='demo2026';
+function vLogin(){return '<div class="lg"><div class="card"><h2>Suite de Poligrafía</h2><p class="mut">Inicia sesión para continuar</p><div class="f" style="grid-template-columns:1fr"><label>Usuario<input data-l="u" autocomplete="username" value="'+esc(S.lf.u)+'"></label><label>Contraseña<input type="password" data-l="p" autocomplete="current-password" value="'+esc(S.lf.p)+'"></label></div>'+(S.lf.e?'<p class="note" style="background:var(--badb);color:var(--bad)">'+S.lf.e+'</p>':'')+'<button class="btn" type="button" data-act="login">Ingresar</button></div><div class="card"><h3>Usuarios de demostración</h3><p class="mut">Contraseña de todos: '+PASS+'</p>'+USERS.map(u=>'<div class="fm"><span>'+u[0]+' · '+u[1]+'</span><button class="btn sm" type="button" data-act="fill" data-u="'+u[0]+'">Usar</button></div>').join('')+'</div></div>';}
+function doLogin(){const u=USERS.find(x=>x[0]===S.lf.u.trim().toLowerCase());if(u&&S.lf.p===PASS){S.user=u;S.role=u[2];S.view='dash';S.msg='';S.closing=0;S.lf={u:'',p:'',e:''};}else S.lf.e='Usuario o contraseña incorrectos.';render();}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.dataset&&e.target.dataset.l)doLogin();});
+function render(){if(!S.user){document.getElementById('sb').style.display='none';document.getElementById('app').innerHTML=vLogin();return;}document.getElementById('sb').style.display='';const m=MENU[kind()];if(!m.includes(S.view))S.view=m[0];
+document.getElementById('sb').innerHTML='<h1>Suite de Poligrafía</h1>'+m.map(v=>'<button type="button" data-act="nav" data-v="'+v+'"'+(v===S.view?' class="on"':'')+'>'+dot(v)+LBL[v]+'</button>').join('')+'<label>Sesión iniciada<b style="color:#fff;font-size:13px">'+esc(S.user[1])+'</b><button type="button" class="out" data-act="logout">Cerrar sesión</button></label>';
 const v=S.view,V=v==='dash'?vDash():v==='cal'?vCal():v==='prog'?vProg():v==='res'?vRes():v==='venc'?vVenc():v==='form'?vForm():v==='usr'?vUsr():v==='diaria'?vDia():v==='resumen'?vResumen():vRec(v);
 document.getElementById('app').style.setProperty('--mc',MC[v]);document.getElementById('app').innerHTML='<div><h2>'+dot(v)+LBL[v]+'</h2><span class="mut">'+INFO[kind()]+'</span></div>'+(S.msg?'<div class="note">'+S.msg+'</div>':'')+V;}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,d=b.dataset;
@@ -200,6 +219,9 @@ else if(a==='xls'){xls();return;}
 else if(a==='dxls'){dxls();return;}
 else if(a==='rxls'){rxls();return;}
 else if(a==='rcopy'){rcopy();return;}
+else if(a==='login'){doLogin();return;}
+else if(a==='fill'){S.lf.u=d.u;S.lf.p=PASS;S.lf.e='';}
+else if(a==='logout'){S.user=null;S.msg='';}
 else if(a==='rs')S.rs=d.p;
 else if(a==='dnot'){const n=S.tests.filter(x=>x.f===S.dd&&x.e!=='Reprogramar').length;S.msg='Notificación enviada al administrador (simulado): programación del '+fmt(S.dd)+' de los 3 poligrafistas, '+n+' pruebas, con el Excel adjunto.';}
 else if(a==='rsend'){const q=isP()?S.role:S.rs;S.msg='Resumen de '+PN[q]+' del '+fmt(S.dd)+' enviado al administrador y al analista (simulado): '+dayAct(q,S.dd).length+' actividades.';}
@@ -215,7 +237,7 @@ else if(a==='rec'){const g=d.g,R=S.rf[g],o={};if(!R.f||!R.ini||!R.fin){S.msg='Fa
 FC[g].forEach(z=>{o[z[0]]=R[z[0]]||(z[2]==='sel'?z[3][0]:'');});o.p=isP()?S.role:(Object.keys(PN).find(k=>PN[k]===R.p)||'P1');
 S.rec[g].push(o);S.rf[g]={f:TODAY};S.msg='Registro guardado; las horas ya cuentan en el dashboard de cumplimiento.';}
 render();});
-function setv(e){const t=e.target,d=t.dataset;if(d&&d.s!==undefined){if(e.type==='change'){const vs=vrows().filter(o=>S.vf==='all'||vst(o)===S.vf);if(d.s==='all')vs.forEach(o=>{S.sel[o.x.doc]=t.checked});else S.sel[d.s]=t.checked;render();}return;}if(d&&d.d){if(e.type==='change'&&t.value){S[d.d]=t.value;render();}return;}if(t.id==='role'){S.role=t.value;S.msg='';S.closing=0;render();return;}if(!d)return;
+function setv(e){const t=e.target,d=t.dataset;if(d&&d.s!==undefined){if(e.type==='change'){const vs=vrows().filter(o=>S.vf==='all'||vst(o)===S.vf);if(d.s==='all')vs.forEach(o=>{S.sel[o.x.doc]=t.checked});else S.sel[d.s]=t.checked;render();}return;}if(d&&d.l){S.lf[d.l]=t.value;return;}if(d&&d.d){if(e.type==='change'&&t.value){S[d.d]=t.value;render();}return;}if(t.id==='role'){S.role=t.value;S.msg='';S.closing=0;render();return;}if(!d)return;
 const v=t.type==='file'?(t.files[0]?t.files[0].name:''):t.value;
 if(d.g){S.rf[d.g][d.f]=v;return;}
 if(d.c){S.cl[d.c]=v;if(d.c==='r'&&e.type==='change')render();return;}
