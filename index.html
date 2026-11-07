@@ -325,6 +325,25 @@ main>*{flex-shrink:0}
 @media(max-width:700px){.pm-r{grid-template-columns:1fr}}
 .vfl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 12px}.vfl label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}.vfl select,.vfl input{max-width:none;width:100%;box-sizing:border-box}
 @media(max-width:600px){.vfl{grid-template-columns:1fr}}
+.ct-ps{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.ct-ps button{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:13px;cursor:pointer}
+.ct-ps button i{width:9px;height:9px;border-radius:50%}
+.ct-ps button.on{background:#0B2A5B;border-color:#0B2A5B;color:#fff}
+.ct-bar{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:8px 10px;margin:0 0 8px;background:var(--card);border:1px solid var(--line);border-radius:14px}
+.ct-nav{display:flex;align-items:center;gap:4px}
+.ct-nav button{height:36px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;cursor:pointer;border-radius:10px}
+.ct-ar{width:36px;font-size:20px;line-height:1;padding:0}
+.ct-hoy{padding:0 14px;font-weight:600;font-size:13px}
+.ct-nav button:hover,.ct-seg button:hover:not(.on){background:var(--bg)}
+.ct-tt::first-letter{text-transform:uppercase}.ct-tt{margin:0;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ct-seg{display:inline-flex;padding:3px;background:var(--bg);border:1px solid var(--line);border-radius:12px}
+.ct-seg button{border:0;background:none;padding:7px 14px;border-radius:9px;font:inherit;font-size:13px;color:var(--mut);cursor:pointer}
+.ct-seg button.on{background:#0B2A5B;color:#fff;font-weight:600}
+.ct-zn{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;font-size:12.5px;color:var(--mut);margin:0 0 10px;padding:0 2px}
+.ct-zn>i{width:9px;height:9px;border-radius:50%}.ct-zn b{color:var(--ink)}
+.ct-zn details{position:relative}.ct-zn summary{cursor:pointer;color:var(--br);font-weight:600;list-style:none}.ct-zn summary::-webkit-details-marker{display:none}
+.ct-zn details[open]{flex-basis:100%}.ct-zn details[open] p{margin:6px 0 0;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(15,40,60,.15);color:var(--ink);line-height:1.5}
+@media(max-width:600px){.ct-bar{grid-template-columns:1fr auto;grid-template-areas:"nav seg" "tt tt"}.ct-nav{grid-area:nav}.ct-seg{grid-area:seg}.ct-tt{grid-area:tt;font-size:15px}.ct-seg button{padding:7px 10px}}
 </style>
 </head>
 <body>
@@ -491,8 +510,8 @@ function mondayOf(s){const d=D(s),g=(d.getDay()+6)%7;return addD(s,-g);}
 function calHours(list){return [...new Set(SLOTS.concat(list.map(x=>x.h)))].sort((a,b)=>pad(a)<pad(b)?-1:1);}
 function evB(x,all){const dt=detail(x);return '<div class="ev '+(dt?(x.e==='En curso'?'enc':x.e==='Programada'||x.e==='Realizada'?x.e:'x'):'o')+'"'+(dt?' tabindex="0" data-tt="'+x.id+'"':'')+(all&&dt?' style="border-left:4px solid '+PC[x.p]+'"':'')+'>'+(dt?(all?'<b>'+PN[x.p].replace('Poligrafista ','P')+'</b> · ':'')+esc(x.n)+'<br>'+x.t+' · '+x.ciudad:'Ocupado')+'</div>';}
 function vCal(){const p=isP()?S.role:S.cp,all=p==='ALL',cn=S.role==='admin'||S.role==='th'||isP(),v=S.cv||'w',a=S.cd||TODAY,live=x=>x.e!=='Reprogramar'&&(all||x.p===p);
-const tabs=(isP()?'':'<div class="tb">'+PS.map(q=>'<button type="button" data-act="cp" data-p="'+q+'"'+(q===p?' class="on"':'')+'>'+PN[q]+'</button>').join('')+'<button type="button" data-act="cp" data-p="ALL"'+(all?' class="on"':'')+'>Conjunto (los 4)</button></div>')+
-'<div class="tb">'+[['d','Día'],['w','Semana'],['m','Mes']].map(z=>'<button type="button" data-act="cv" data-v="'+z[0]+'"'+(v===z[0]?' class="on"':'')+'>'+z[1]+'</button>').join('')+'</div>';
+const tabs=isP()?'':'<div class="ct-ps" role="tablist" aria-label="Poligrafista">'+PS.map(q=>'<button type="button" role="tab" data-act="cp" data-p="'+q+'"'+(q===p&&!all?' class="on" aria-selected="true"':'')+'><i style="background:'+(PC[q]||'#64748B')+'"></i>'+esc(PN[q])+'</button>').join('')+'<button type="button" role="tab" data-act="cp" data-p="ALL"'+(all?' class="on" aria-selected="true"':'')+'>Conjunto</button></div>';
+const vseg='<div class="ct-seg" role="group" aria-label="Vista">'+[['d','Día'],['w','Semana'],['m','Mes']].map(z=>'<button type="button" data-act="cv" data-v="'+z[0]+'"'+(v===z[0]?' class="on" aria-pressed="true"':' aria-pressed="false"')+'>'+z[1]+'</button>').join('')+'</div>';
 let title,body,step=v==='d'?1:v==='w'?7:30;
 const cell=(d,h,q)=>{const au=q&&q!=='ALL'?ausente(q,d,h):null;if(au)return '<span class="aus" title="'+esc(PN[q]+' · '+ausTxt(au))+'">'+ausTxt(au)+'</span>';return cn&&d>=TODAY?'<button type="button" class="add" data-act="cell" data-d="'+d+'" data-h="'+h+'" data-p="'+q+'" aria-label="Agendar '+h+'">+</button>':'';};
 if(v==='m'){const f=a.slice(0,8)+'01',st=mondayOf(f),dm=D(f).getMonth();title=D(f).toLocaleDateString('es-CO',{month:'long',year:'numeric'});
@@ -502,12 +521,13 @@ if(w>3&&D(addD(st,w*7)).getMonth()!==dm)break;rows+='<tr>'+tr+'</tr>';}
 body='<div class="card sc"><table class="ct mt"><tr>'+['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(x=>'<th>'+x+'</th>').join('')+'</tr>'+rows+'</table></div><p class="mut">Toca un día para abrir su vista diaria. Los números son pruebas programadas'+(all?' (color por poligrafista).':'.')+'</p>';}
 else if(v==='d'){title=D(a).toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});const ts=S.tests.filter(x=>x.f===a&&live(x)),hs=calHours(ts),cols=all?PS:[p];
 body='<div class="card sc"><table class="ct"><tr><th></th>'+cols.map(q=>'<th>'+PN[q]+'<br><small>'+ZONA[q]+'</small></th>').join('')+'</tr>'+hs.map(h=>'<tr><td class="t">'+h+'</td>'+cols.map(q=>{const x=ts.find(t=>t.p===q&&t.h===h);return '<td>'+(x?evB(x,false):cell(a,h,q))+'</td>';}).join('')+'</tr>').join('')+'</table></div><p class="mut">'+ts.length+' pruebas este día. Pasa el cursor sobre una prueba para ver el detalle.</p>';}
-else{const mon=mondayOf(a),days=[0,1,2,3,4,5].map(i=>addD(mon,i));title=fmt(days[0])+' – '+fmt(days[5]);const ts=S.tests.filter(x=>x.f>=days[0]&&x.f<=days[5]&&live(x)),hs=calHours(ts);
+else{const mon=mondayOf(a),days=[0,1,2,3,4,5].map(i=>addD(mon,i));title=(()=>{const a0=D(days[0]),a1=D(days[5]),m=x=>x.toLocaleDateString('es-CO',{month:'short'}).replace('.','');return a0.getMonth()===a1.getMonth()?a0.getDate()+' – '+a1.getDate()+' de '+m(a1)+' '+a1.getFullYear():a0.getDate()+' '+m(a0)+' – '+a1.getDate()+' '+m(a1)+' '+a1.getFullYear();})();const ts=S.tests.filter(x=>x.f>=days[0]&&x.f<=days[5]&&live(x)),hs=calHours(ts);
 body='<div class="card sc"><table class="ct"><tr><th></th>'+days.map((d,i)=>'<th'+(d===TODAY?' class="hoy"':'')+'>'+DN[i]+' '+D(d).getDate()+'</th>').join('')+'</tr>'+hs.map(h=>'<tr><td class="t">'+h+'</td>'+days.map(d=>{const xs=ts.filter(t=>t.f===d&&t.h===h);return '<td>'+(all?xs.map(x=>evB(x,true)).join('')+(xs.length<3?'':''):(xs[0]?evB(xs[0],false):cell(d,h,p)))+'</td>';}).join('')+'</tr>').join('')+'</table></div><p class="mut">'+(all?'Conjunto: las pruebas de los poligrafistas, con una franja de color por poligrafista. ':'')+'Pasa el cursor sobre una prueba para ver el detalle. '+(cn&&!all?'Toca «+» para agendar en ese horario.':'')+'</p>';}
 const mm=S.mm||(a.slice(0,7)+'-01'),m0=D(mm),mst=mondayOf(mm),wk=mondayOf(a);let mr='';for(let w=0;w<6;w++){let tr='';for(let i=0;i<7;i++){const d=addD(mst,w*7+i),n=S.tests.filter(x=>x.f===d&&live(x)).length,out=D(d).getMonth()!==m0.getMonth();tr+='<td><button type="button" data-act="mgd" data-d="'+d+'" class="md'+(out?' out':'')+(d===TODAY?' hoy':'')+(d===a?' sel':'')+'" aria-label="'+fmt(d)+'">'+D(d).getDate()+(n?'<i></i>':'')+'</button></td>';}
 if(w>3&&D(addD(mst,w*7)).getMonth()!==m0.getMonth())break;mr+='<tr'+(v==='w'&&addD(mst,w*7)===wk?' class="wk"':'')+'>'+tr+'</tr>';}
 const mini='<aside class="mini"><div class="mh"><button type="button" data-act="mn" data-n="-1" aria-label="Mes anterior">‹</button><b>'+m0.toLocaleDateString('es-CO',{month:'long',year:'numeric'})+'</b><button type="button" data-act="mn" data-n="1" aria-label="Mes siguiente">›</button></div><table><tr>'+['L','M','M','J','V','S','D'].map(x=>'<th>'+x+'</th>').join('')+'</tr>'+mr+'</table><button type="button" class="btn sm" data-act="mhoy" style="width:100%;margin-top:8px">Ir a hoy</button><button type="button" class="btn sm" data-act="pxls" style="width:100%;margin-top:6px">Descargar programación semanal (Excel)</button></aside>';
-return '<div class="cwrap">'+mini+'<div class="cmain">'+tabs+'<div class="tb"><button type="button" data-act="cn" data-n="-1" aria-label="Anterior">‹</button><button type="button" data-act="cn" data-n="0">Hoy</button><button type="button" data-act="cn" data-n="1" aria-label="Siguiente">›</button><b>'+title+'</b><span class="mut">'+(all?'Los 4 poligrafistas':PN[p]+' · Zona '+ZONA[p]+' · '+CIT(p).join(', '))+'</span></div>'+body+'</div></div>';}
+return '<div class="cwrap">'+mini+'<div class="cmain">'+tabs+'<div class="ct-bar"><div class="ct-nav"><button type="button" class="ct-ar" data-act="cn" data-n="-1" aria-label="Anterior">‹</button><button type="button" class="ct-hoy" data-act="cn" data-n="0">Hoy</button><button type="button" class="ct-ar" data-act="cn" data-n="1" aria-label="Siguiente">›</button></div><h3 class="ct-tt">'+title+'</h3>'+vseg+'</div>'+
+'<div class="ct-zn">'+(all?'<b>Conjunto</b> · los '+PS.length+' poligrafistas':'<i style="background:'+(PC[p]||'#64748B')+'"></i><b>'+esc(PN[p])+'</b><span>Zona: '+esc(ZONA[p]||'')+'</span><details><summary>'+CIT(p).length+' ciudades</summary><p>'+esc(CIT(p).join(', '))+'</p></details>')+'</div>'+body+'</div></div>';}
 /* ===== Notificación al líder + autorización con firma electrónica (simulado) ===== */
 const LE={'Líder A':'lidera@suitepoligrafia.example','Líder B':'liderb@suitepoligrafia.example','Líder C':'liderc@suitepoligrafia.example'};
 const TH_MAILS=['talentohumano1@suitepoligrafia.example','talentohumano2@suitepoligrafia.example'];
