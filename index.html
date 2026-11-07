@@ -241,6 +241,30 @@ main>*{flex-shrink:0}
 .au-pw code{font-size:18px;font-weight:700;letter-spacing:.04em;padding:6px 12px;border-radius:10px;background:var(--card);border:1px dashed var(--br)}
 .au-pw .btn{margin:0}.au-pw p{grid-column:1/-1;margin:0;font-size:12.5px;color:var(--mut)}
 @media(max-width:600px){.au-pw{grid-template-columns:1fr}}
+.lib{border:0;font:inherit;text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.lib:hover{transform:translateY(-1px);box-shadow:0 18px 44px rgba(15,40,90,.16)}
+.lib>div{flex:1;display:flex;flex-direction:column;gap:2px}.lia{font-style:normal;font-size:22px;color:#94A3B8}
+.lx-t{margin:12px 0 4px;font-size:22px;text-align:center;color:#0B2A5B}.lx-s{margin:0 0 16px;text-align:center;color:var(--mut);font-size:13.5px;line-height:1.45}
+.lx-2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.lx-sel,.lx-ta{width:100%;max-width:none;box-sizing:border-box;min-height:46px;padding:10px 14px;border:1px solid #D5DEEA;border-radius:12px;font:inherit;background:#fff;color:#0B2447;margin-bottom:4px}
+.lx-ta{min-height:84px;resize:vertical}
+.lx-ok{text-align:center}.lx-ic{width:56px;height:56px;border-radius:50%;background:var(--okb);color:var(--ok);display:grid;place-items:center;font-size:28px;font-weight:800;margin:4px auto 0}
+@media(max-width:480px){.lx-2{grid-template-columns:1fr}}
+.bl{position:relative}
+.blb{position:relative;width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
+.blb svg{width:20px;height:20px}
+.bln{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border-radius:99px;background:#EF4444;color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;border:2px solid var(--card)}
+.blp{position:absolute;right:0;top:50px;width:min(380px,calc(100vw - 24px));background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 50px rgba(15,40,60,.18);z-index:60;overflow:hidden}
+.blh{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.bll{max-height:min(420px,60vh);overflow-y:auto}
+.bli{display:flex;gap:10px;width:100%;text-align:left;padding:12px 14px;border:0;border-bottom:1px solid var(--line);background:none;font:inherit;color:var(--ink);cursor:pointer}
+.bli:hover{background:var(--bg)}.bli.nu{background:var(--okb)}
+.blic{font-size:18px;flex:none;line-height:1.3}
+.blx{display:flex;flex-direction:column;gap:2px;min-width:0}.blx b{font-size:13.5px}.blx span{font-size:12.5px;color:var(--mut);white-space:pre-line;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}.blx small{font-size:11px;color:var(--mut)}
+.au-pend{border-color:#F59E0B}
+.au-pr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.au-pr>div{display:flex;flex-direction:column}
+@media(max-width:700px){.blp{position:fixed;left:12px;right:12px;top:64px;width:auto}}
 </style>
 </head>
 <body>
@@ -596,12 +620,45 @@ const m=document.getElementById('cm');if(m)m.scrollTop=m.scrollHeight;}
 const USERS=[['administrador@suitepoligrafia.example', 'Administrador', 'admin', '5344d83702b731a3d8336e4e4793b0f9cef3704e28778258fc25891c2e3d9487'], ['analista@suitepoligrafia.example', 'Analista', 'analista', 'f3621b01f85df1566eddc124060e656aa0535c7f99dc36b41a1155e36e9e3b93'], ['poligrafista1@suitepoligrafia.example', 'Poligrafista 1', 'P1', 'a60b8edc0b9450c1c025f23305e3f5be2652a642f37de4277cd3ecd9dff757eb'], ['poligrafista2@suitepoligrafia.example', 'Poligrafista 2', 'P2', 'c83b9585e3b02ee08e54ab33f96ef9b1e641cc0af2c2dc60c774912b8e90d4a1'], ['poligrafista3@suitepoligrafia.example', 'Poligrafista 3', 'P3', '0dd25ef1602f18bdeaf996d7b698652717916f391ba5215de77ab041439531d9'], ['poligrafista4@suitepoligrafia.example', 'Poligrafista 4', 'P4', '00fe0a753459ac039ba5b777274928116252417836063ac001ca3c9128fe29a6'], ['talentohumano1@suitepoligrafia.example', 'Talento Humano 1', 'th', 'b702114775f8285a3e4b8f3b60ad5753a9ccdc4078b71ea753331b144a83b5a2'], ['talentohumano2@suitepoligrafia.example', 'Talento Humano 2', 'th', 'c4ede350be5210aa610789bdec3db724d2822e48e9cb64769411f2a4d11af0f0'], ['lidera@suitepoligrafia.example', 'Líder A', 'lider', '9e9ab1c3330678d3119c2f8687aa60243cdb8aebf95c9944e98b56438af84801'], ['liderb@suitepoligrafia.example', 'Líder B', 'lider', 'c97452f888810bd5d5b3af13c7d9347a2e8e376cf7cc893a4bd3771791480e43'], ['liderc@suitepoligrafia.example', 'Líder C', 'lider', 'e26cbb7ab6bb1d969dc0704ded9ab2a39888ca621e09b68f5cb165a2ae240079']];
 function vLogin(){const L=S.lf,ep=L.e?'<p class="note" style="background:var(--badb);color:var(--bad);margin:12px 0 0">'+L.e+'</p>':'';
 return '<div class="lgn"><div class="lh"><div class="bub">«Una persona reaccionará con <em>mayor intensidad</em> a todo aquello que le genere mayor amenaza a su bienestar.»<small>Psicología</small></div>'+COVER+'<div class="gl"><span class="chp">✦ SEGURIDAD Y RIESGOS</span><h1>Seguridad y Riesgos</h1><p style="margin:0;font-size:20px;font-weight:700">Polígrafías</p><p style="margin:4px 0 0;font-size:15px">Gestión inteligente de pruebas</p><p style="margin:10px 0 0;font-size:13px">Programa, cierra y consulta pruebas de forma ágil.</p><div class="ft"><div class="fi2"><span>'+si('bolt')+'</span>Más<br>ágil</div><div class="fi2"><span>'+si('val')+'</span>Más<br>seguro</div><div class="fi2"><span>'+si('chart')+'</span>Más<br>control</div></div></div></div>'+
-'<div class="lr"><div class="lc"><div class="lbn"><span class="lg2" style="display:inline-block">'+LOGO+'</span><b>SEGURIDAD Y RIESGOS</b><small>Polígrafías · Gestión inteligente de pruebas</small></div>'+
+'<div class="lr">'+(S.lm?vLx():'<div class="lc"><div class="lbn"><span class="lg2" style="display:inline-block">'+LOGO+'</span><b>SEGURIDAD Y RIESGOS</b><small>Polígrafías · Gestión inteligente de pruebas</small></div>'+
 '<label class="lab">Correo</label><div class="iw">'+si('user','l')+'<input data-l="u" autocomplete="username" placeholder="tu correo" value="'+esc(L.u)+'"></div>'+
 '<label class="lab">Contraseña</label><div class="iw">'+si('lock','l')+'<input type="'+(L.show?'text':'password')+'" data-l="p" autocomplete="current-password" placeholder="Ingresa tu contraseña" value="'+esc(L.p)+'"><button type="button" class="eye" data-act="eye" aria-label="Mostrar u ocultar la contraseña">'+si('eye')+'</button></div>'+
 '<label class="rm"><input type="checkbox" class="chk" data-l="rem"'+(L.rem?' checked':'')+'> Recordar usuario en este equipo</label>'+ep+'<button class="btn" type="button" data-act="login">Ingresar →</button><button type="button" class="lk" data-act="forgot">¿Olvidaste tu contraseña?</button></div>'+
-'<div class="li"><span class="ci2">'+si('user')+'</span><div><b>¿Primera vez aquí? Activar cuenta</b><span class="mut">Entra con la clave temporal que te dio el administrador y crea la tuya.</span></div></div>'+
-'<div class="li"><span class="ci2">'+si('headset')+'</span><div><b>¿Problemas de acceso?</b><span class="mut">Contacta al administrador para recibir ayuda.</span></div></div></div></div>';}
+'<button type="button" class="li lib" data-act="lgreg"><span class="ci2">'+si('user')+'</span><div><b>¿Primera vez aquí? Crear cuenta</b><span class="mut">Regístrate con tu correo y crea tu contraseña. El administrador aprobará tu acceso.</span></div><i class="lia">›</i></button>'+
+'<button type="button" class="li lib" data-act="lghelp"><span class="ci2">'+si('headset')+'</span><div><b>¿Problemas de acceso?</b><span class="mut">Escríbele al administrador; le llega el aviso en la app.</span></div><i class="lia">›</i></button>')+'</div></div>';}
+/* ===== Registro y ayuda desde el ingreso ===== */
+S.lm='';S.lx={};
+const LXM=['Olvidé mi contraseña','Mi cuenta está bloqueada o desactivada','No tengo la clave temporal','Mi solicitud de cuenta sigue pendiente','Otro'];
+function vLx(){const X=S.lx,m=S.lm,er=X.e?'<div class="fl-msg" role="alert">'+esc(X.e)+'</div>':'';
+const fi=(id,lab,ph,ty,ic,ac)=>'<label class="lab">'+lab+'</label><div class="iw">'+si(ic||'user','l')+'<input data-lx="'+id+'" type="'+(ty||'text')+'"'+(ac?' autocomplete="'+ac+'"':'')+' placeholder="'+ph+'" value="'+esc(X[id]||'')+'"></div>';
+const back='<button type="button" class="lk" data-act="lgback">← Volver a ingresar</button>';
+const head=(t,s)=>'<div class="lbn"><span class="lg2" style="display:inline-block">'+LOGO+'</span></div><h2 class="lx-t">'+t+'</h2><p class="lx-s">'+s+'</p>';
+if(!API&&(m==='reg'||m==='help'))return '<div class="lc">'+head(m==='reg'?'Crear cuenta':'Problemas de acceso','Esta opción está disponible en la versión con servidor (Railway). En la demo, contacta al administrador.')+back+'</div>';
+if(m==='regok'||m==='helpok')return '<div class="lc lx-ok"><div class="lx-ic">✓</div><h2 class="lx-t">'+(m==='regok'?'Solicitud enviada':'Mensaje enviado')+'</h2><p class="lx-s">'+(m==='regok'?'El administrador ya recibió tu solicitud. Cuando la apruebe podrás ingresar con tu correo y la contraseña que creaste.':'El administrador ya recibió tu mensaje en la app y te contactará pronto.')+'</p>'+back+'</div>';
+if(m==='reg'){const n=X.c1||'',rq=[[n.length>=8,'Mínimo 8 caracteres'],[/[a-zA-Z]/.test(n),'Al menos una letra'],[/[0-9]/.test(n),'Al menos un número'],[!!n&&n===(X.c2||''),'Ambas claves coinciden']];
+return '<div class="lc">'+head('Crear cuenta','Completa tus datos. Tu acceso quedará activo cuando el administrador apruebe la solicitud y te asigne un rol.')+er+
+fi('nombre','Nombre completo','Ej. María Gómez','text','user','name')+fi('correo','Correo','tu@correo.com','email','user','email')+
+'<div class="lx-2"><div>'+fi('telefono','Celular (opcional)','3001234567','tel','headset','tel')+'</div><div>'+fi('cargo','Cargo (opcional)','Ej. Poligrafista','text','user')+'</div></div>'+
+fi('c1','Contraseña','Crea tu contraseña','password','lock','new-password')+fi('c2','Repite la contraseña','Vuelve a escribirla','password','lock','new-password')+
+'<ul class="fl-req" id="lxreq">'+rq.map(([v,t],i)=>'<li id="lxr'+i+'" class="'+(v?'ok':'')+'"><i></i>'+t+'</li>').join('')+'</ul>'+
+'<button class="btn" type="button" data-act="lgregsend">Enviar solicitud →</button>'+back+'</div>';}
+return '<div class="lc">'+head('Problemas de acceso','Cuéntale al administrador qué pasa. Le llega un aviso inmediato en la app.')+er+
+fi('correo','Correo con el que ingresas','tu@correo.com','email','user','email')+
+'<div class="lx-2"><div>'+fi('nombre','Nombre','Tu nombre','text','user','name')+'</div><div>'+fi('telefono','Celular (opcional)','Para que te llamen','tel','headset','tel')+'</div></div>'+
+'<label class="lab">Motivo</label><select class="lx-sel" data-lx="motivo">'+LXM.map(o=>'<option'+((X.motivo||LXM[0])===o?' selected':'')+'>'+o+'</option>').join('')+'</select>'+
+'<label class="lab">Mensaje (opcional)</label><textarea class="lx-ta" data-lx="mensaje" rows="3" placeholder="Describe brevemente el problema">'+esc(X.mensaje||'')+'</textarea>'+
+'<button class="btn" type="button" data-act="lghelpsend">Enviar al administrador →</button>'+back+'</div>';}
+function lxReq(){const X=S.lx,n=X.c1||'';[n.length>=8,/[a-zA-Z]/.test(n),/[0-9]/.test(n),!!n&&n===(X.c2||'')].forEach((v,i)=>{const e=document.getElementById('lxr'+i);if(e)e.classList.toggle('ok',v);});}
+document.addEventListener('input',e=>{const d=e.target&&e.target.dataset;if(d&&d.lx){S.lx[d.lx]=e.target.value;if(d.lx==='c1'||d.lx==='c2')lxReq();}});
+document.addEventListener('change',e=>{const d=e.target&&e.target.dataset;if(d&&d.lx)S.lx[d.lx]=e.target.value;});
+document.addEventListener('click',async e=>{const b=e.target.closest&&e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;if(!/^lg(reg|help|back|regsend|helpsend)$/.test(a)&&a!=='forgot')return;e.stopImmediatePropagation();const X=S.lx;X.e='';
+if(a==='lgreg'){S.lm='reg';S.lx={correo:S.lf.u||''};}
+else if(a==='lghelp'||a==='forgot'){S.lm='help';S.lx={correo:S.lf.u||'',motivo:a==='forgot'?LXM[0]:LXM[0]};}
+else if(a==='lgback'){S.lm='';S.lx={};}
+else if(a==='lgregsend'){if(!(X.nombre||'').trim())X.e='Escribe tu nombre completo.';else if((X.c1||'')!==(X.c2||''))X.e='Las contraseñas no coinciden.';
+else{b.disabled=true;try{const j=await api('/api/registro',{nombre:X.nombre,correo:X.correo,telefono:X.telefono,cargo:X.cargo,clave:X.c1});if(j.ok){S.lm='regok';S.lf.u=(X.correo||'').trim().toLowerCase();}else X.e=j.error||'No se pudo enviar la solicitud.';}catch(x){X.e='Sin conexión con el servidor.';}}}
+else if(a==='lghelpsend'){b.disabled=true;try{const j=await api('/api/ayuda-acceso',{correo:X.correo,nombre:X.nombre,telefono:X.telefono,motivo:X.motivo||LXM[0],mensaje:X.mensaje});if(j.ok)S.lm='helpok';else X.e=j.error||'No se pudo enviar.';}catch(x){X.e='Sin conexión con el servidor.';}}
+render();},true);
 let PW=(()=>{try{return JSON.parse(localStorage.getItem('poli_pw')||'{}')}catch(e){return{}}})();
 const PWS=()=>{try{localStorage.setItem('poli_pw',JSON.stringify(PW))}catch(e){}};
 const sha=async x=>{if(typeof crypto!=='undefined'&&crypto.subtle){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(x)))].map(b=>b.toString(16).padStart(2,'0')).join('');}return 'x'+btoa(unescape(encodeURIComponent(x)));};
@@ -624,9 +681,25 @@ const P=[],A=[];j.items.forEach(r=>{const d=r.datos||{};if(r.tipo==='poli')P.pus
 S.vivoP=P;P.forEach(d=>{const t=S.tests.find(z=>z.id===d.id);if(t&&(t.e==='Programada'||t.e==='En curso')){t.e='En curso';t.fase=d.fase;t.t0=d.t0;t.h0=d.h0;t.tl=d.tl;}});
 S.live=A;const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)){VIVO_PEND=true;return;}VIVO_PEND=false;render();}catch(e){}}
 setInterval(vivoSync,8000);
-async function apiIniciar(){try{const j=await api('/api/salud');if(j&&j.db==='conectada'){API=true;const y=await api('/api/yo');if(y.ok&&y.user){apiEntrar(y.user);render();vivoSync();}}}catch(e){}}
+/* ===== Campana de avisos ===== */
+S.av={list:[],n:0,open:false};let AV_SIG='';
+const hace=t=>{const s=Math.max(0,(Date.now()-new Date(t))/1000);if(s<60)return 'ahora';if(s<3600)return 'hace '+Math.floor(s/60)+' min';if(s<86400)return 'hace '+Math.floor(s/3600)+' h';return new Date(t).toLocaleDateString('es-CO',{day:'numeric',month:'short'});};
+const AVI={registro:'👤',acceso:'🔑',ayuda:'🛟',mensaje:'💬',sistema:'ℹ️'};
+function bellHtml(){const A=S.av;return '<div class="bl"><button type="button" class="blb" data-act="bell" aria-label="Avisos'+(A.n?' ('+A.n+' sin leer)':'')+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"/></svg>'+(A.n?'<span class="bln">'+(A.n>9?'9+':A.n)+'</span>':'')+'</button>'+
+(A.open?'<div class="blp"><div class="blh"><b>Avisos</b>'+(A.n?'<button type="button" class="lk" data-act="bellall" style="width:auto;margin:0">Marcar todo como leído</button>':'')+'</div><div class="bll">'+
+(A.list.length?A.list.map(x=>'<button type="button" class="bli'+(x.leido?'':' nu')+'" data-act="bellgo" data-id="'+x.id+'" data-t="'+x.tipo+'"><span class="blic">'+(AVI[x.tipo]||'ℹ️')+'</span><span class="blx"><b>'+esc(x.titulo)+'</b><span>'+esc(x.texto||'')+'</span><small>'+hace(x.creado)+'</small></span></button>').join(''):'<p class="mut" style="padding:18px;text-align:center;margin:0">No tienes avisos.</p>')+'</div></div>':'')+'</div>';}
+async function avSync(){if(!API||!S.user||S.force)return;try{const j=await api('/api/avisos');if(!j.ok)return;const sig=JSON.stringify(j.avisos.map(x=>[x.id,x.leido]));if(sig===AV_SIG)return;AV_SIG=sig;S.av.list=j.avisos;S.av.n=j.sinLeer;const t=document.getElementById('top');if(t&&t.querySelector('.bl')){const w=document.createElement('div');w.innerHTML=bellHtml();t.querySelector('.bl').replaceWith(w.firstChild);}}catch(e){}}
+setInterval(avSync,8000);
+document.addEventListener('click',async e=>{const b=e.target.closest&&e.target.closest('[data-act]');const A=S.av;
+if(!b){if(A.open&&!(e.target.closest&&e.target.closest('.blp'))){A.open=false;render();}return;}const a=b.dataset.act;if(!/^bell/.test(a)){if(A.open&&!b.closest('.blp')){A.open=false;}return;}e.stopImmediatePropagation();
+if(a==='bell'){A.open=!A.open;if(A.open)avSync();}
+else if(a==='bellall'){A.list.forEach(x=>x.leido=true);A.n=0;api('/api/avisos/leidos',{}).catch(()=>{});}
+else if(a==='bellgo'){const id=+b.dataset.id,x=A.list.find(z=>z.id===id);if(x&&!x.leido){x.leido=true;A.n=Math.max(0,A.n-1);api('/api/avisos/leidos',{ids:[id]}).catch(()=>{});}
+if((b.dataset.t==='registro'||b.dataset.t==='acceso')&&menuDe().includes('usr')){S.view='usr';S.au.list=null;S.au.fail=false;A.open=false;}}
+render();},true);
+async function apiIniciar(){try{const j=await api('/api/salud');if(j&&j.db==='conectada'){API=true;const y=await api('/api/yo');if(y.ok&&y.user){apiEntrar(y.user);render();vivoSync();avSync();}}}catch(e){}}
 async function doLogin(){if(API){try{const j=await api('/api/login',{u:S.lf.u.trim().toLowerCase(),p:S.lf.p});
-if(j.ok){apiEntrar(j.user);setTimeout(vivoSync,300);try{if(S.lf.rem)localStorage.setItem('poli_user',j.user.usuario);else localStorage.removeItem('poli_user');}catch(e){}S.lf={u:'',p:'',e:'',rem:S.lf.rem,show:false};}
+if(j.ok){apiEntrar(j.user);setTimeout(()=>{vivoSync();avSync();},300);try{if(S.lf.rem)localStorage.setItem('poli_user',j.user.usuario);else localStorage.removeItem('poli_user');}catch(e){}S.lf={u:'',p:'',e:'',rem:S.lf.rem,show:false};}
 else S.lf.e=j.error||'Correo o contraseña incorrectos.';}catch(e){S.lf.e='No hay conexión con el servidor. Intenta de nuevo.';}render();return;}
 try{if(typeof crypto==='undefined'||!crypto.subtle){S.lf.e='Abre la página con https para poder iniciar sesión.';render();return;}
 const u=USERS.find(x=>x[0]===S.lf.u.trim().toLowerCase());let ok=false;if(u)ok=(await sha(u[0]+':'+S.lf.p))===(PW[u[0]]||u[3]);
@@ -695,22 +768,25 @@ async function auCargar(){S.au.busy=true;try{const j=await api('/api/usuarios');
 function vAdmUsr(){const A=S.au;if(A.list===null&&!A.busy&&!A.fail)setTimeout(auCargar,0);
 const pw=A.pw?'<div class="au-pw"><div><b>Clave temporal de '+esc(A.pw.nombre)+'</b><span>'+esc(A.pw.usuario)+'</span></div><code id="au-code">'+esc(A.pw.clave)+'</code><button class="btn sm" type="button" data-act="aucopy">'+(A.pw.ok?'Copiada ✓':'Copiar')+'</button><p>Compártela por un medio seguro. Solo se muestra esta vez; al entrar deberá crear su clave personal.</p><button type="button" class="lk" data-act="aupwx" style="width:auto;margin:0">Cerrar</button></div>':'';
 const er=A.err?'<div class="fl-msg" role="alert">'+esc(A.err)+'</div>':'';
-const rows=(A.list||[]).map(u=>{const k=rkOf(u.rol),col=k==='poli'?(PC[u.rol]||u.color||'#64748B'):'';
+const pend=(A.list||[]).filter(u=>u.estado==='pendiente');
+const rows=(A.list||[]).filter(u=>u.estado!=='pendiente').map(u=>{const k=rkOf(u.rol),col=k==='poli'?(PC[u.rol]||u.color||'#64748B'):'';
 return ['<span class="au-n">'+(col?'<i style="background:'+col+'"></i>':'')+'<span><b>'+esc(u.nombre)+'</b><small class="mut" style="display:block">'+esc(u.usuario)+'</small></span></span>',RLB[k]+(k==='poli'?' <small class="mut">'+u.rol+'</small>':''),esc(u.zona||'—'),
 (u.permisos?pill('wa','Personalizados'):'<span class="mut">Del rol</span>'),u.clave==='temporal'?pill('wa','Temporal'):pill('ok','Personal'),u.activo?pill('ok','Activo'):pill('bad','Inactivo'),
 '<span class="au-ac"><button class="btn sm sec" type="button" data-act="auedit" data-id="'+u.id+'">Editar</button><button class="btn sm sec" type="button" data-act="aureset" data-id="'+u.id+'">Nueva clave</button></span>'];});
 const list='<div class="card sc"><div class="au-hd"><div><h3 style="margin:0">Usuarios</h3><p class="mut" style="margin:2px 0 0">'+(A.list?A.list.length+' cuentas':A.fail?'No se pudo cargar. <button type="button" class="lk" data-act="auretry" style="display:inline;width:auto;margin:0">Reintentar</button>':'Cargando…')+'</p></div>'+(A.f?'':'<button class="btn" type="button" data-act="aunew" style="margin:0">+ Nuevo usuario</button>')+'</div>'+
 (A.list?tbl(['Usuario','Rol','Zona','Permisos','Clave','Estado',''],rows):'')+'</div>';
-return pw+er+(A.f?vAuForm():'')+list;}
-function vAuForm(){const f=S.au.f,ed=!!f.id,k=rkOf(f.rol),P=f.perms;
+const pl=pend.length?'<div class="card au-pend"><h3 style="margin:0 0 4px">Solicitudes pendientes · '+pend.length+'</h3><p class="mut" style="margin:0 0 12px">Personas que se registraron desde la pantalla de ingreso. Apruébalas asignando un rol, o recházalas.</p>'+
+pend.map(u=>'<div class="au-pr"><div><b>'+esc(u.nombre)+'</b><span class="mut">'+esc(u.usuario)+(u.telefono?' · '+esc(u.telefono):'')+'</span></div><span class="au-ac"><button class="btn sm" type="button" data-act="auapr" data-id="'+u.id+'">Aprobar</button><button class="btn sm sec au-off" type="button" data-act="aurej" data-id="'+u.id+'">Rechazar</button></span></div>').join('')+'</div>':'';
+return pw+er+(A.f?vAuForm():'')+pl+list;}
+function vAuForm(){const f=S.au.f,ed=!!f.id&&!f.aprobar,k=rkOf(f.rol),P=f.perms;
 const inp=(id,lab,ph,dis)=>'<label>'+lab+'<input data-au="'+id+'" value="'+esc(f[id]||'')+'" placeholder="'+ph+'"'+(dis?' disabled':'')+'></label>';
-return '<div class="card au-f"><h3>'+(ed?'Editar usuario':'Nuevo usuario')+'</h3><div class="f">'+inp('nombre','Nombre completo','Ej. María Gómez')+inp('correo','Correo (será su usuario)','nombre@empresa.com',ed)+
+return '<div class="card au-f"><h3>'+(f.aprobar?'Aprobar solicitud':ed?'Editar usuario':'Nuevo usuario')+'</h3><div class="f">'+inp('nombre','Nombre completo','Ej. María Gómez')+inp('correo','Correo (será su usuario)','nombre@empresa.com',ed||f.aprobar)+
 '<label>Rol<select data-au="rol"'+(ed?' disabled':'')+'>'+Object.keys(RLB).map(r=>'<option value="'+r+'"'+(k===r?' selected':'')+'>'+RLB[r]+'</option>').join('')+'</select></label>'+
 inp('telefono','Celular / WhatsApp (opcional)','Ej. 3001234567')+
 (k==='poli'?inp('zona','Zona','Ej. Eje Cafetero')+'<label>Color en calendario<input type="color" data-au="color" value="'+esc(f.color||PAL[0])+'" style="padding:4px;min-height:42px"></label>':'')+'</div>'+
 '<h4 class="au-h4">Permisos <span class="mut">· plantilla de '+RLB[k]+(f.custom?', ajustada':'')+'</span></h4><div class="au-perm">'+VISTAS.map(v=>'<label class="au-ck"><input type="checkbox" data-aup="'+v+'"'+(P.includes(v)?' checked':'')+'> '+esc(NL&&NL[v]||LBL[v]||v)+'</label>').join('')+'</div>'+
 '<p class="mut" style="font-size:12px;margin:6px 0 14px">“Cambiar contraseña” siempre queda activo. '+(f.custom?'<button type="button" class="lk" data-act="autpl" style="display:inline;width:auto;margin:0">Volver a la plantilla del rol</button>':'')+'</p>'+
-'<div class="au-bt"><button class="btn" type="button" data-act="ausave" style="margin:0">'+(ed?'Guardar cambios':'Crear usuario')+'</button><button class="btn sec" type="button" data-act="aucancel" style="margin:0">Cancelar</button>'+(ed?'<button class="btn sec au-off" type="button" data-act="autog" data-id="'+f.id+'" style="margin:0 0 0 auto">'+(f.activo?'Desactivar usuario':'Activar usuario')+'</button>':'')+'</div>'+(ed?'':'<p class="mut" style="font-size:12px;margin-top:10px">Al crearlo se genera una clave temporal para que entre la primera vez.</p>')+'</div>';}
+'<div class="au-bt"><button class="btn" type="button" data-act="ausave" style="margin:0">'+(f.aprobar?'Aprobar y dar acceso':ed?'Guardar cambios':'Crear usuario')+'</button><button class="btn sec" type="button" data-act="aucancel" style="margin:0">Cancelar</button>'+(ed&&!f.aprobar?'<button class="btn sec au-off" type="button" data-act="autog" data-id="'+f.id+'" style="margin:0 0 0 auto">'+(f.activo?'Desactivar usuario':'Activar usuario')+'</button>':'')+'</div>'+(ed||f.aprobar?'':'<p class="mut" style="font-size:12px;margin-top:10px">Al crearlo se genera una clave temporal para que entre la primera vez.</p>')+'</div>';}
 function auSame(a,b){return a.length===b.length&&a.every(x=>b.includes(x));}
 document.addEventListener('input',e=>{const d=e.target&&e.target.dataset;if(d&&d.au&&S.au.f&&d.au!=='rol')S.au.f[d.au]=e.target.value;});
 document.addEventListener('change',e=>{const t=e.target,d=t&&t.dataset;if(!d||!S.au.f)return;
@@ -720,14 +796,16 @@ document.addEventListener('click',async e=>{const b=e.target.closest&&e.target.c
 if(a==='aunew'){A.f={nombre:'',correo:'',rol:'poli',telefono:'',zona:'',color:PAL[(A.list||[]).length%PAL.length],perms:auTpl('poli'),custom:false};A.pw=null;}
 else if(a==='auedit'&&u){const tp=auTpl(u.rol);A.f={id:u.id,activo:u.activo,nombre:u.nombre,correo:u.usuario,rol:u.rol,telefono:u.telefono||'',zona:u.zona||'',color:u.color||PC[u.rol]||PAL[0],perms:u.permisos?u.permisos.filter(v=>v!=='clave'):tp.slice(),custom:!!u.permisos};A.pw=null;scrollTo(0,0);}
 else if(a==='aucancel')A.f=null;
+else if(a==='auapr'&&u){A.f={id:u.id,aprobar:true,activo:false,nombre:u.nombre,correo:u.usuario,rol:'poli',telefono:u.telefono||'',zona:'',color:PAL[(A.list||[]).length%PAL.length],perms:auTpl('poli'),custom:false};A.pw=null;scrollTo(0,0);}
+else if(a==='aurej'&&u){if(!confirm('¿Rechazar la solicitud de '+u.nombre+'? Se eliminará.'))return;const j=await api('/api/usuarios/'+id,null,'DELETE');if(j.ok){A.list=null;S.msg='Solicitud rechazada.';}else A.err=j.error||'No se pudo rechazar.';}
 else if(a==='auretry'){A.fail=false;A.list=null;}
 else if(a==='aupwx')A.pw=null;
 else if(a==='autpl'&&A.f){A.f.perms=auTpl(A.f.rol);A.f.custom=false;}
 else if(a==='aucopy'){try{await navigator.clipboard.writeText(A.pw.clave);A.pw.ok=1;render();return;}catch(x){const c=document.getElementById('au-code');if(c){const r=document.createRange();r.selectNodeContents(c);getSelection().removeAllRanges();getSelection().addRange(r);}return;}}
 else if(a==='ausave'&&A.f){const f=A.f,body={nombre:f.nombre,telefono:f.telefono,zona:f.zona,color:rkOf(f.rol)==='poli'?f.color:'',permisos:f.custom?f.perms:null};
-if(!f.id){body.correo=f.correo;body.rol=rkOf(f.rol);}
+if(!f.id){body.correo=f.correo;body.rol=rkOf(f.rol);}if(f.aprobar){body.aprobar=true;body.rol=rkOf(f.rol);}
 const j=f.id?await api('/api/usuarios/'+f.id,null,'PUT',body):await api('/api/usuarios',body);
-if(j.ok){A.f=null;if(j.clave)A.pw={nombre:j.usuario.nombre,usuario:j.usuario.usuario,clave:j.clave};A.list=null;cargarEquipo();S.msg=f.id?'Cambios guardados.':'Usuario creado.';scrollTo(0,0);}else A.err=j.error||'No se pudo guardar.';}
+if(j.ok){A.f=null;if(j.clave)A.pw={nombre:j.usuario.nombre,usuario:j.usuario.usuario,clave:j.clave};A.list=null;cargarEquipo();S.msg=f.aprobar?'Solicitud aprobada: '+f.nombre+' ya puede ingresar con la contraseña que creó.':f.id?'Cambios guardados.':'Usuario creado.';scrollTo(0,0);}else A.err=j.error||'No se pudo guardar.';}
 else if(a==='aureset'&&u){if(!confirm('¿Generar una nueva clave temporal para '+u.nombre+'? Su clave actual dejará de funcionar.'))return;const j=await api('/api/usuarios/'+id+'/clave',{});if(j.ok){A.pw={nombre:u.nombre,usuario:u.usuario,clave:j.clave};A.list=null;scrollTo(0,0);}else A.err=j.error||'No se pudo restablecer.';}
 else if(a==='autog'&&u){if(u.activo&&!confirm('¿Desactivar a '+u.nombre+'? No podrá ingresar hasta que lo actives de nuevo.'))return;const j=await api('/api/usuarios/'+id,null,'PUT',{activo:!u.activo});if(j.ok){A.list=null;A.f=null;S.msg=u.activo?'Usuario desactivado.':'Usuario activado.';}else A.err=j.error||'No se pudo cambiar el estado.';}
 render();});
@@ -736,7 +814,7 @@ function vCuentas(){return S.role!=='admin'?'':'<div class="card sc"><h3>Cuentas
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.dataset&&e.target.dataset.l)doLogin();if(e.key==='Enter'&&e.target.id==='cin'){ask(e.target.value);render();}});
 function render(){hideTip();{const sh=document.querySelector&&document.querySelector('.shell');if(sh)sh.classList.toggle('lm',!S.user||!!S.force);}if(!S.user){document.getElementById('sb').style.display='none';document.getElementById('app').innerHTML=vLogin();renderChat();return;}if(S.force){document.getElementById('sb').style.display='none';document.getElementById('app').innerHTML=vPrimer();document.getElementById('chat').innerHTML='';flChk();return;}document.getElementById('sb').style.display='';const m=menuDe();if(!m.includes(S.view))S.view=m[0];
 document.getElementById('sb').innerHTML='<div class="bd"><span class="lg2">'+LOGO+'</span><div><b>SEGURIDAD Y RIESGOS</b><small>Polígrafías</small></div></div><div class="ma"><div class="mav">'+avHtml(S.user,40)+'<div><b>'+esc(S.user[1])+'</b><small>'+esc(rk(S.role).lv)+'</small></div></div><span class="rp2">'+RN()+'</span></div><div class="nv">NAVEGACIÓN</div>'+(()=>{const pri=['dash','cal','prog','res','diaria','venc','resumen'].filter(v=>m.includes(v)).slice(0,4);return m.map(v=>'<button type="button" data-act="nav" data-v="'+v+'" class="'+(v===S.view?'on ':'')+(pri.includes(v)?'':'ex')+'">'+dot(v)+ic(v)+'<span class="lb">'+(NL[v]||LBL[v])+'</span><span class="sh">'+(SH[v]||LBL[v])+'</span></button>').join('')+'<button type="button" class="mo'+(S.more?' on':'')+'" data-act="more" aria-label="Más módulos"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span class="sh">Más</span></button>'+(S.more?'<div class="msh" data-act="more"><div class="msb"><div class="mst">Todos los módulos</div>'+m.map(v=>'<button type="button" class="mt'+(v===S.view?' on':'')+'" data-act="nav" data-v="'+v+'">'+ic(v)+'<span>'+(NL[v]||LBL[v])+'</span></button>').join('')+'<button type="button" class="mt out2" data-act="logout"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#FCA5A5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span>Cerrar sesión</span></button></div></div>':'');})();
-document.body.classList.toggle('mo-open',!!S.more);document.getElementById('top').innerHTML='<div><div class="ttl">'+LBL[S.view]+'</div><div class="mut">'+D(TODAY).toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</div></div><div class="hr"><span class="rp3">'+RN()+'</span><div class="uc">'+avHtml(S.user,36)+'<div class="un"><b>'+esc(S.user[1])+'</b><small>'+esc(S.user[0])+'</small></div></div><button type="button" class="lo" data-act="logout">Cerrar sesión</button></div>';
+document.body.classList.toggle('mo-open',!!S.more);document.getElementById('top').innerHTML='<div><div class="ttl">'+LBL[S.view]+'</div><div class="mut">'+D(TODAY).toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</div></div><div class="hr">'+(API?bellHtml():'')+'<span class="rp3">'+RN()+'</span><div class="uc">'+avHtml(S.user,36)+'<div class="un"><b>'+esc(S.user[1])+'</b><small>'+esc(S.user[0])+'</small></div></div><button type="button" class="lo" data-act="logout">Cerrar sesión</button></div>';
 const v=S.view,V=v==='dash'?vDash():v==='cal'?vCal():v==='prog'?vProg():v==='res'?vRes():v==='venc'?vVenc():v==='form'?vForm():v==='usr'?vUsr():v==='clave'?vClave():v==='imp'?vImp():v==='diaria'?vDia():v==='resumen'?vResumen():vRec(v);
 document.getElementById('app').style.setProperty('--mc',MC[v]);document.getElementById('app').innerHTML=(v==='dash'?hero():'<div class="pt"><h2>'+LBL[v]+'</h2><span class="mut">'+INFO[kind()]+'</span></div>')+(S.msg?'<div class="note">'+S.msg+'</div>':'')+V;renderChat();}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,d=b.dataset;

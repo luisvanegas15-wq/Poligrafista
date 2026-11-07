@@ -72,6 +72,18 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS debe_cambiar BOOLEAN DEFAULT TRUE;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permisos JSONB;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS color TEXT;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'activo';
+CREATE TABLE IF NOT EXISTS avisos (
+  id SERIAL PRIMARY KEY,
+  para TEXT NOT NULL,            -- correo del destinatario o 'rol:admin'
+  tipo TEXT NOT NULL,            -- registro, acceso, ayuda, sistema
+  titulo TEXT NOT NULL,
+  texto TEXT,
+  de TEXT,
+  datos JSONB DEFAULT '{}'::jsonb,
+  leido BOOLEAN DEFAULT FALSE,
+  creado TIMESTAMPTZ DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS en_vivo (
   id TEXT PRIMARY KEY,
   tipo TEXT NOT NULL,
@@ -174,7 +186,7 @@ app.post('/api/login', async (req, res) => {
   const reg = (intentos.get(k) || []).filter(t => ahora - t < 15 * 60e3);
   if (reg.length >= 5) return res.status(429).json({ ok: false, error: 'Demasiados intentos. Espera 15 minutos.' });
   try {
-    const r = await pool.query('SELECT * FROM usuarios WHERE usuario = $1 AND activo', [correo]);
+    const r = await pool.query('SELECT * FROM usuarios WHERE usuario = $1', [correo]);
     const u = r.rows[0];
     let ok = false;
     if (u && u.password_hash) ok = await bcrypt.compare(clave, u.password_hash);
@@ -183,6 +195,8 @@ app.post('/api/login', async (req, res) => {
     }
     if (!ok) { reg.push(ahora); intentos.set(k, reg); return res.status(401).json({ ok: false, error: 'Correo o contraseña incorrectos.' }); }
     intentos.delete(k);
+    if (u.estado === 'pendiente') return res.status(403).json({ ok: false, error: 'Tu solicitud de cuenta está pendiente. El administrador debe aprobarla antes de que puedas ingresar.' });
+    if (!u.activo) return res.status(403).json({ ok: false, error: 'Tu cuenta está desactivada. Contacta al administrador.' });
     const token = crypto.randomBytes(32).toString('hex');
     await pool.query("INSERT INTO sesiones (token, usuario_id, expira) VALUES ($1, $2, now() + interval '" + HORAS_SESION + " hours')", [token, u.id]);
     ponerCookie(res, token, HORAS_SESION * 3600);
@@ -292,7 +306,7 @@ async function soloAdmin(req, res) {
   if (u.rol !== 'admin') { res.status(403).json({ ok: false, error: 'Solo el administrador puede hacer esto.' }); return null; }
   return u;
 }
-const filaUsuario = r => ({ id: r.id, usuario: r.usuario, nombre: r.nombre, rol: r.rol, zona: r.zona, telefono: r.telefono, color: r.color,
+const filaUsuario = r => ({ id: r.id, estado: r.estado || 'activo', usuario: r.usuario, nombre: r.nombre, rol: r.rol, zona: r.zona, telefono: r.telefono, color: r.color,
   permisos: r.permisos || null, activo: r.activo, clave: r.debe_cambiar ? 'temporal' : 'personal' });
 
 app.get('/api/usuarios', async (req, res) => {
@@ -336,13 +350,23 @@ app.put('/api/usuarios/:id', async (req, res) => {
   const nombre = b.nombre !== undefined ? String(b.nombre).trim().slice(0, 80) : cur.nombre;
   if (!nombre) return res.status(400).json({ ok: false, error: 'Escribe el nombre.' });
   const permisos = b.permisos !== undefined ? limpiarPermisos(b.permisos) : cur.permisos;
+  let rolNuevo = cur.rol, estado = cur.estado || 'activo', activo = b.activo !== undefined ? !!b.activo : cur.activo;
+  if (estado === 'pendiente' && b.aprobar) {
+    if (!ROLES_OK.includes(b.rol)) return res.status(400).json({ ok: false, error: 'Elige el rol para aprobar la solicitud.' });
+    rolNuevo = b.rol;
+    if (rolNuevo === 'poli') {
+      const m = await pool.query("SELECT COALESCE(MAX(substring(rol from 2)::int), 0) AS n FROM usuarios WHERE rol ~ '^P[0-9]+$'");
+      rolNuevo = 'P' + (Math.max(4, m.rows[0].n) + 1);
+    }
+    estado = 'activo'; activo = true;
+  }
   if (cur.id === u.id && permisos && !permisos.includes('usr')) return res.status(400).json({ ok: false, error: 'No puedes quitarte el acceso a Usuarios.' });
   const r = await pool.query(
-    `UPDATE usuarios SET nombre=$1, zona=$2, telefono=$3, color=$4, permisos=$5, activo=$6 WHERE id=$7 RETURNING *`,
+    `UPDATE usuarios SET nombre=$1, zona=$2, telefono=$3, color=$4, permisos=$5, activo=$6, rol=$8, estado=$9 WHERE id=$7 RETURNING *`,
     [nombre, b.zona !== undefined ? (String(b.zona).slice(0, 60) || null) : cur.zona,
      b.telefono !== undefined ? (String(b.telefono).slice(0, 30) || null) : cur.telefono,
      b.color !== undefined ? (/^#[0-9a-fA-F]{6}$/.test(b.color) ? b.color : null) : cur.color,
-     JSON.stringify(permisos), b.activo !== undefined ? !!b.activo : cur.activo, id]
+     JSON.stringify(permisos), activo, id, rolNuevo, estado]
   );
   if (b.activo === false) await pool.query('DELETE FROM sesiones WHERE usuario_id = $1', [id]);
   res.json({ ok: true, usuario: filaUsuario(r.rows[0]) });
@@ -363,6 +387,76 @@ app.get('/api/equipo', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
   const r = await pool.query("SELECT rol, nombre, zona, color FROM usuarios WHERE rol ~ '^P[0-9]+$' AND activo ORDER BY substring(rol from 2)::int");
   res.json({ ok: true, poligrafistas: r.rows });
+});
+
+// Rechazar (borrar) una solicitud pendiente
+app.delete('/api/usuarios/:id', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  const r = await pool.query("DELETE FROM usuarios WHERE id = $1 AND estado = 'pendiente' RETURNING id", [+req.params.id]);
+  if (!r.rows[0]) return res.status(400).json({ ok: false, error: 'Solo se pueden rechazar solicitudes pendientes.' });
+  res.json({ ok: true });
+});
+
+// ===== Registro y ayuda desde la pantalla de ingreso (sin sesión) =====
+const limitePublico = new Map();
+function permitirPublico(req, max = 5) {
+  const k = req.ip, ahora = Date.now();
+  const reg = (limitePublico.get(k) || []).filter(t => ahora - t < 60 * 60e3);
+  if (reg.length >= max) return false;
+  reg.push(ahora); limitePublico.set(k, reg); return true;
+}
+async function avisar(para, tipo, titulo, texto, de, datos) {
+  await pool.query('INSERT INTO avisos (para, tipo, titulo, texto, de, datos) VALUES ($1,$2,$3,$4,$5,$6)',
+    [para, tipo, String(titulo).slice(0, 160), String(texto || '').slice(0, 2000), de || null, datos || {}]);
+}
+
+app.post('/api/registro', async (req, res) => {
+  if (!pool) return sinBD(res);
+  if (!permitirPublico(req)) return res.status(429).json({ ok: false, error: 'Demasiadas solicitudes. Intenta más tarde.' });
+  const b = req.body || {};
+  const nombre = String(b.nombre || '').trim().slice(0, 80), correo = String(b.correo || '').trim().toLowerCase().slice(0, 120);
+  const clave = String(b.clave || ''), telefono = String(b.telefono || '').trim().slice(0, 30), cargo = String(b.cargo || '').trim().slice(0, 80);
+  if (!nombre) return res.status(400).json({ ok: false, error: 'Escribe tu nombre completo.' });
+  if (!CORREO_RE.test(correo)) return res.status(400).json({ ok: false, error: 'El correo no es válido.' });
+  if (clave.length < 8 || !/[a-zA-Z]/.test(clave) || !/[0-9]/.test(clave)) return res.status(400).json({ ok: false, error: 'La clave debe tener mínimo 8 caracteres, con letras y números.' });
+  const ex = await pool.query('SELECT 1 FROM usuarios WHERE usuario = $1', [correo]);
+  if (ex.rows.length) return res.status(400).json({ ok: false, error: 'Ya existe una cuenta o una solicitud con ese correo. Si olvidaste tu clave, usa «¿Problemas de acceso?».' });
+  await pool.query(
+    `INSERT INTO usuarios (usuario, nombre, rol, correo, telefono, password_hash, debe_cambiar, activo, estado, zona)
+     VALUES ($1,$2,'pendiente',$1,$3,$4,FALSE,FALSE,'pendiente',$5)`,
+    [correo, nombre, telefono || null, await bcrypt.hash(clave, 12), null]
+  );
+  await avisar('rol:admin', 'registro', 'Nueva solicitud de cuenta: ' + nombre,
+    nombre + ' (' + correo + ')' + (cargo ? ' · ' + cargo : '') + (telefono ? ' · Tel. ' + telefono : '') + ' pidió acceso. Apruébala y asígnale un rol en Usuarios y roles.', correo, { correo });
+  res.json({ ok: true });
+});
+
+app.post('/api/ayuda-acceso', async (req, res) => {
+  if (!pool) return sinBD(res);
+  if (!permitirPublico(req)) return res.status(429).json({ ok: false, error: 'Demasiadas solicitudes. Intenta más tarde.' });
+  const b = req.body || {};
+  const correo = String(b.correo || '').trim().toLowerCase().slice(0, 120), nombre = String(b.nombre || '').trim().slice(0, 80);
+  const motivo = String(b.motivo || 'Otro').slice(0, 60), mensaje = String(b.mensaje || '').trim().slice(0, 1500), telefono = String(b.telefono || '').trim().slice(0, 30);
+  if (!CORREO_RE.test(correo)) return res.status(400).json({ ok: false, error: 'Escribe el correo con el que ingresas.' });
+  if (!mensaje && motivo === 'Otro') return res.status(400).json({ ok: false, error: 'Cuéntanos qué problema tienes.' });
+  await avisar('rol:admin', 'acceso', 'Problema de acceso: ' + motivo, (nombre ? nombre + ' · ' : '') + correo + (telefono ? ' · Tel. ' + telefono : '') + (mensaje ? '\n' + mensaje : ''), correo, { correo, motivo });
+  res.json({ ok: true });
+});
+
+// ===== Avisos (campana) =====
+app.get('/api/avisos', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const r = await pool.query("SELECT id, tipo, titulo, texto, de, datos, leido, creado FROM avisos WHERE para = $1 OR para = $2 ORDER BY creado DESC LIMIT 60",
+    [u.usuario, 'rol:' + (/^P\d+$/.test(u.rol) ? 'poli' : u.rol)]);
+  res.json({ ok: true, avisos: r.rows, sinLeer: r.rows.filter(x => !x.leido).length });
+});
+app.post('/api/avisos/leidos', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : null;
+  const rolp = 'rol:' + (/^P\d+$/.test(u.rol) ? 'poli' : u.rol);
+  if (ids) await pool.query('UPDATE avisos SET leido = TRUE WHERE id = ANY($1) AND (para = $2 OR para = $3)', [ids, u.usuario, rolp]);
+  else await pool.query('UPDATE avisos SET leido = TRUE WHERE para = $1 OR para = $2', [u.usuario, rolp]);
+  res.json({ ok: true });
 });
 
 app.use(express.static(__dirname, { index: 'index.html', extensions: ['html'] }));
