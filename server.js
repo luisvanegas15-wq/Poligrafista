@@ -660,7 +660,7 @@ app.post('/api/planta', express.json({ limit: '8mb' }), async (req, res) => {
     const c = String(f?.c || '').replace(/\D/g, '').replace(/^0+/, '').slice(0, 20);
     if (!c || typeof f.d !== 'object' || !f.d) continue;
     const d = {};
-    for (const [k, v] of Object.entries(f.d).slice(0, 40)) if (v !== null && v !== '' && v !== undefined) d[String(k).slice(0, 60)] = String(v).slice(0, 200);
+    for (const [k, v] of Object.entries(f.d).slice(0, 70)) if (v !== null && v !== '' && v !== undefined) d[String(k).slice(0, 60)] = String(v).slice(0, 200);
     limpias.push({ c, d });
   }
   if (req.body?.reemplazar) await pool.query('DELETE FROM planta');
