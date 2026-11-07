@@ -73,6 +73,16 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permisos JSONB;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS color TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'activo';
+CREATE TABLE IF NOT EXISTS mensajes (
+  id SERIAL PRIMARY KEY,
+  de TEXT NOT NULL,
+  para TEXT NOT NULL,
+  texto TEXT NOT NULL,
+  leido BOOLEAN DEFAULT FALSE,
+  creado TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS mensajes_para_idx ON mensajes (para, leido);
+CREATE INDEX IF NOT EXISTS mensajes_par_idx ON mensajes (de, para, creado);
 CREATE TABLE IF NOT EXISTS avisos (
   id SERIAL PRIMARY KEY,
   para TEXT NOT NULL,            -- correo del destinatario o 'rol:admin'
@@ -123,6 +133,10 @@ async function initDB() {
         'INSERT INTO usuarios (usuario, nombre, rol, hash_legado, debe_cambiar) VALUES ($1,$2,$3,$4,TRUE) ON CONFLICT (usuario) DO NOTHING',
         [usuario, nombre, rol, legado]
       );
+    }
+    // Nombres reales de los poligrafistas iniciales (solo si conservan el nombre genérico)
+    for (const [n, real] of [[1, 'Durley Wilches'], [2, 'Carlos Castaño'], [3, 'Luis Vanegas'], [4, 'José Barbosa']]) {
+      await pool.query('UPDATE usuarios SET nombre = $1 WHERE usuario = $2 AND nombre = $3', [real, 'poligrafista' + n + '@suitepoligrafia.example', 'Poligrafista ' + n]);
     }
     await pool.query('DELETE FROM sesiones WHERE expira < now()');
     await pool.query("DELETE FROM en_vivo WHERE actualizado < now() - interval '24 hours'");
@@ -456,6 +470,54 @@ app.post('/api/avisos/leidos', async (req, res) => {
   const rolp = 'rol:' + (/^P\d+$/.test(u.rol) ? 'poli' : u.rol);
   if (ids) await pool.query('UPDATE avisos SET leido = TRUE WHERE id = ANY($1) AND (para = $2 OR para = $3)', [ids, u.usuario, rolp]);
   else await pool.query('UPDATE avisos SET leido = TRUE WHERE para = $1 OR para = $2', [u.usuario, rolp]);
+  res.json({ ok: true });
+});
+
+// ===== Mensajería interna =====
+app.get('/api/contactos', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const r = await pool.query(`
+    SELECT x.usuario, x.nombre, x.rol,
+      (SELECT COUNT(*)::int FROM mensajes m WHERE m.de = x.usuario AND m.para = $1 AND NOT m.leido) AS sin_leer,
+      (SELECT json_build_object('texto', m.texto, 'creado', m.creado, 'mio', m.de = $1) FROM mensajes m
+        WHERE (m.de = x.usuario AND m.para = $1) OR (m.de = $1 AND m.para = x.usuario) ORDER BY m.creado DESC LIMIT 1) AS ultimo
+    FROM usuarios x WHERE x.activo AND COALESCE(x.estado,'activo') = 'activo' AND x.usuario <> $1`, [u.usuario]);
+  const c = r.rows.sort((a, b) => ((b.ultimo && b.ultimo.creado) || '').localeCompare((a.ultimo && a.ultimo.creado) || '') || a.nombre.localeCompare(b.nombre));
+  res.json({ ok: true, contactos: c, sinLeer: c.reduce((s, x) => s + x.sin_leer, 0) });
+});
+
+app.get('/api/mensajes/:con', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const con = String(req.params.con).toLowerCase();
+  const r = await pool.query(`SELECT id, de, texto, creado, leido FROM (
+      SELECT * FROM mensajes WHERE (de = $1 AND para = $2) OR (de = $2 AND para = $1) ORDER BY creado DESC LIMIT 200) t ORDER BY creado`, [u.usuario, con]);
+  await pool.query('UPDATE mensajes SET leido = TRUE WHERE de = $1 AND para = $2 AND NOT leido', [con, u.usuario]);
+  res.json({ ok: true, mensajes: r.rows.map(m => ({ id: m.id, mio: m.de === u.usuario, texto: m.texto, creado: m.creado, leido: m.leido })) });
+});
+
+app.post('/api/mensajes', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const para = String(req.body?.para || '').toLowerCase(), texto = String(req.body?.texto || '').trim().slice(0, 2000);
+  if (!texto) return res.status(400).json({ ok: false, error: 'Escribe un mensaje.' });
+  const d = await pool.query("SELECT 1 FROM usuarios WHERE usuario = $1 AND activo AND COALESCE(estado,'activo') = 'activo'", [para]);
+  if (!d.rows.length || para === u.usuario) return res.status(400).json({ ok: false, error: 'Destinatario no válido.' });
+  const r = await pool.query('INSERT INTO mensajes (de, para, texto) VALUES ($1,$2,$3) RETURNING id, creado', [u.usuario, para, texto]);
+  res.json({ ok: true, id: r.rows[0].id, creado: r.rows[0].creado });
+});
+
+// Soporte: datos de contacto del administrador y solicitud de ayuda desde el asistente
+app.get('/api/soporte', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const r = await pool.query("SELECT usuario, nombre, telefono FROM usuarios WHERE rol = 'admin' AND activo ORDER BY id");
+  res.json({ ok: true, admins: r.rows });
+});
+app.post('/api/ayuda', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const texto = String(req.body?.texto || '').trim().slice(0, 1500);
+  if (!texto) return res.status(400).json({ ok: false, error: 'Cuéntale al administrador en qué necesitas ayuda.' });
+  const ad = await pool.query("SELECT usuario FROM usuarios WHERE rol = 'admin' AND activo AND usuario <> $1", [u.usuario]);
+  for (const a of ad.rows) await pool.query('INSERT INTO mensajes (de, para, texto) VALUES ($1,$2,$3)', [u.usuario, a.usuario, '🛟 Solicitud de ayuda: ' + texto]);
+  await avisar('rol:admin', 'ayuda', u.nombre + ' pide ayuda', texto, u.usuario, { correo: u.usuario });
   res.json({ ok: true });
 });
 
