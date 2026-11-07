@@ -861,7 +861,7 @@ app.post('/api/drive/ruta', async (req, res) => {
       if (!opciones.length) continue;
       const hs = await hijos(id, true), norm = x => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
       const hit = hs.find(h => opciones.some(o => norm(h.name) === norm(o))) || hs.find(h => opciones.slice(1).some(o => norm(h.name).split(' ').includes(norm(o))));
-      if (hit) { id = hit.id; camino.push({ id, name: hit.name }); } else { const c = await crearCarpeta(id, opciones[0]); id = c.id; camino.push({ id, name: opciones[0] }); }
+      if (hit) { id = hit.id; camino.push({ id, name: hit.name }); } else if (req.body?.soloExistentes) break; else { const c = await crearCarpeta(id, opciones[0]); id = c.id; camino.push({ id, name: opciones[0] }); }
     }
     res.json({ ok: true, id, camino });
   } catch (e) { errDrive(res, e); }
