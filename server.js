@@ -78,6 +78,14 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS bloqueado_hasta TIMESTAMPTZ;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_ingreso TIMESTAMPTZ;
 ALTER TABLE resultados ADD COLUMN IF NOT EXISTS origen TEXT;
 CREATE INDEX IF NOT EXISTS resultados_poli_idx ON resultados (poligrafista, origen);
+CREATE TABLE IF NOT EXISTS repositorios (
+  id SERIAL PRIMARY KEY,
+  nombre TEXT NOT NULL,
+  categoria TEXT NOT NULL,
+  url TEXT NOT NULL,
+  poligrafista TEXT,
+  creado TIMESTAMPTZ DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS planta (
   cedula TEXT PRIMARY KEY,
   datos JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -344,7 +352,7 @@ app.delete('/api/vivo/:id', async (req, res) => {
 
 // ===== Administración de usuarios (solo administrador) =====
 const ROLES_OK = ['admin', 'analista', 'poli', 'th', 'lider'];
-const VISTAS_OK = ['dash', 'cal', 'diaria', 'prog', 'res', 'resumen', 'venc', 'val', 'arq', 'cgm', 'form', 'usr', 'imp', 'clave', 'perm'];
+const VISTAS_OK = ['dash', 'cal', 'diaria', 'prog', 'res', 'resumen', 'venc', 'val', 'arq', 'cgm', 'form', 'usr', 'imp', 'clave', 'perm', 'repo'];
 const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function claveTemporal() {
   const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz', d = '23456789';
@@ -718,6 +726,43 @@ app.post('/api/resultados/importar', express.json({ limit: '10mb' }), async (req
     res.json({ ok: true, guardados: limpias.length });
   } catch (e) { await client.query('ROLLBACK').catch(() => {}); console.error('resultados:', e.message); res.status(500).json({ ok: false, error: 'No se pudieron guardar los resultados.' }); }
   finally { client.release(); }
+});
+
+// ===== Repositorios en Google Drive (carpetas para PDF, gráficas y evidencias) =====
+const CAT_REPO = ['PDF Control', 'PDF Preempleo', 'Gráficas del polígrafo', 'Autorizaciones firmadas', 'Evidencias (validaciones, arqueos, CGM)', 'Formatos', 'Otro'];
+const URL_DRIVE = /^https:\/\/(drive|docs)\.google\.com\//i;
+app.get('/api/repositorios', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const r = /^P\d+$/.test(u.rol)
+    ? await pool.query('SELECT * FROM repositorios WHERE poligrafista IS NULL OR poligrafista = $1 ORDER BY categoria, nombre', [u.rol])
+    : u.rol === 'lider' ? { rows: [] }
+    : await pool.query('SELECT * FROM repositorios ORDER BY categoria, poligrafista NULLS FIRST, nombre');
+  res.json({ ok: true, repositorios: r.rows, categorias: CAT_REPO });
+});
+function datosRepo(b) {
+  const nombre = String(b.nombre || '').trim().slice(0, 100), categoria = CAT_REPO.includes(b.categoria) ? b.categoria : null;
+  const url = String(b.url || '').trim().slice(0, 500), p = /^P\d+$/.test(b.poligrafista || '') ? b.poligrafista : null;
+  if (!nombre) return { error: 'Escribe un nombre para la carpeta.' };
+  if (!categoria) return { error: 'Elige la categoría.' };
+  if (!URL_DRIVE.test(url)) return { error: 'Pega el enlace de la carpeta de Google Drive (empieza por https://drive.google.com/).' };
+  return { nombre, categoria, url, p };
+}
+app.post('/api/repositorios', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  const d = datosRepo(req.body || {}); if (d.error) return res.status(400).json({ ok: false, error: d.error });
+  const r = await pool.query('INSERT INTO repositorios (nombre, categoria, url, poligrafista) VALUES ($1,$2,$3,$4) RETURNING id', [d.nombre, d.categoria, d.url, d.p]);
+  res.json({ ok: true, id: r.rows[0].id });
+});
+app.put('/api/repositorios/:id', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  const d = datosRepo(req.body || {}); if (d.error) return res.status(400).json({ ok: false, error: d.error });
+  await pool.query('UPDATE repositorios SET nombre=$1, categoria=$2, url=$3, poligrafista=$4 WHERE id=$5', [d.nombre, d.categoria, d.url, d.p, +req.params.id]);
+  res.json({ ok: true });
+});
+app.delete('/api/repositorios/:id', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  await pool.query('DELETE FROM repositorios WHERE id=$1', [+req.params.id]);
+  res.json({ ok: true });
 });
 
 app.use(express.static(__dirname, { index: 'index.html', extensions: ['html'] }));
