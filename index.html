@@ -854,7 +854,7 @@ S.vivoP=[];let VIVO_SIG='',VIVO_PEND=false;
 function vivoPut(id,tipo,datos){if(API&&S.user)api('/api/vivo/'+id,null,'PUT',{tipo,datos}).catch(()=>{});}
 function vivoP(x){vivoPut('poli-'+x.id,'poli',{id:x.id,n:x.n,t:x.t,ciudad:x.ciudad,p:x.p,h0:x.h0,fase:x.fase||0,t0:x.t0,tl:x.tl||[]});}
 function vivoA(x){vivoPut('act-'+x.id,x.g,{id:x.id,g:x.g,p:x.p,o:x.o,fase:x.fase,t0:x.t0,tl:x.tl,dz:x.dz||null});}
-function vivoDel(id){if(API&&S.user)api('/api/vivo/'+id,null,'DELETE').catch(()=>{});}
+function vivoDel(id,estado){if(API&&S.user)api('/api/vivo/'+id+(estado?'?estado='+encodeURIComponent(estado):''),null,'DELETE').catch(()=>{});}
 async function vivoSync(){if(!API||!S.user)return;try{const j=await api('/api/vivo');if(j.status===401){S.user=null;S.force=false;S.lf={u:ru0(),p:'',e:'Tu sesión expiró. Ingresa de nuevo.',rem:true,show:false};render();return;}if(!j.ok)return;
 const sig=JSON.stringify(j.items);if(sig===VIVO_SIG&&!VIVO_PEND)return;VIVO_SIG=sig;
 const P=[],A=[];j.items.forEach(r=>{const d=r.datos||{};if(r.tipo==='poli')P.push(d);else A.push(d);});
@@ -1111,7 +1111,7 @@ await dvAbrir(dest,'',false);}
 function vRepo(){if(!API)return '<div class="card"><p>Disponible en la versión con servidor.</p></div>';const V=S.dv,R=S.rp,ad=S.role==='admin';
 if(V.estado===null){V.estado=false;setTimeout(dvEstado,0);}if(R.list===null&&!R.busy)setTimeout(rpCargar,0);
 const tabs=ad?'<div class="ct-seg" style="margin:0 0 14px"><button type="button" data-act="dvtab" data-t="up"'+(V.tab==='up'?' class="on"':'')+'>Subir archivos</button><button type="button" data-act="dvtab" data-t="cfg"'+(V.tab==='cfg'?' class="on"':'')+'>Configurar carpetas</button></div>':'';
-if(ad&&V.tab==='cfg')return tabs+dvConexion()+vRepoCfg();
+if(ad&&V.tab==='cfg')return tabs+'<div class="card"><h3 style="margin:0 0 6px">Google Chat</h3><p class="mut" style="margin:0 0 10px">Los inicios, cambios de etapa y cierres de polígrafías, validaciones, arqueos y apoyos CGM se avisan automáticamente en el espacio del equipo (sin nombres de evaluados ni resultados).</p><button type="button" class="btn sm" data-act="chatprueba" style="margin:0">Enviar mensaje de prueba</button></div>'+dvConexion()+vRepoCfg();
 const est=V.estado&&V.estado.conectado===false?dvConexion():'';
 const L=R.list||[];if(!V.repo)return tabs+est+'<div class="card"><h3>¿Dónde vas a subir?</h3><p class="mut" style="margin:0 0 12px">Elige la carpeta del repositorio. La app te propone la subcarpeta de año y mes; también puedes navegar y elegir otra.</p>'+(R.list===null?'<p class="mut">Cargando…</p>':!L.length?'<p class="mut">'+(ad?'Primero asigna las carpetas en «Configurar carpetas».':'El administrador aún no ha asignado carpetas.')+'</p>':'<div class="dv-rs">'+L.map(r=>'<button type="button" class="dv-r" data-act="dvrepo" data-id="'+r.id+'"><span>📁</span><b>'+esc(r.nombre)+'</b><small>'+esc(r.categoria)+(r.poligrafista&&!isP()?' · '+esc(PN[r.poligrafista]||''):'')+'</small></button>').join('')+'</div>')+'</div>';
 const sug=dvSug(V.repo.categoria),D0=V.data;
@@ -1128,6 +1128,7 @@ const body=V.busy&&!D0?'<div class="card"><p class="mut">Abriendo carpeta…</p>
 return tabs+est+er+head+body;}
 function dvConexion(){const E=S.dv.estado||{};if(E.conectado)return S.role==='admin'?'<p class="note" style="margin:0 0 14px">✅ Drive conectado con la cuenta de servicio <b>'+esc(E.cuenta||'')+'</b>. Agrégala como <b>Administrador de contenido</b> en la unidad compartida.</p>':'';
 return S.role==='admin'?'<div class="card au-pend"><h3 style="margin:0 0 6px">Conectar Google Drive</h3><p class="mut" style="margin:0 0 8px">Para que la app suba archivos a la unidad compartida falta configurar una cuenta de servicio de Google (una sola vez). Te guío paso a paso desde el chat.</p></div>':'<p class="note" style="margin:0 0 14px">La subida directa a Drive aún no está activa. Mientras tanto puedes abrir la carpeta en Drive y subir desde allí.</p>';}
+document.addEventListener('click',async e=>{const b=e.target.closest&&e.target.closest('[data-act="chatprueba"]');if(!b)return;e.stopImmediatePropagation();b.disabled=true;const j=await api('/api/chat/prueba',{}).catch(()=>({}));S.msg=j.ok?'Mensaje de prueba enviado: revisa el espacio de Google Chat.':(j.error||'No se pudo enviar.');render();},true);
 document.addEventListener('click',async e=>{const b=e.target.closest&&e.target.closest('[data-act]');if(!b||!/^dv/.test(b.dataset.act))return;e.stopImmediatePropagation();const a=b.dataset.act,V=S.dv;V.err='';
 if(a==='dvtab'){V.tab=b.dataset.t;}
 else if(a==='dvrepo'){V.repo=S.rp.list.find(r=>r.id===+b.dataset.id);V.stack=[];V.data=null;V.up=[];if(V.estado&&V.estado.conectado){await dvAbrir(null,'',false);return;}}
@@ -1269,7 +1270,7 @@ else if(a==='dnot'){const n=S.tests.filter(x=>x.f===S.dd&&x.e!=='Reprogramar').l
 else if(a==='rsend'){const q=isP()?S.role:S.rs;S.msg='Resumen de '+PN[q]+' del '+fmt(S.dd)+' enviado al administrador y al analista (simulado): '+dayAct(q,S.dd).length+' actividades.';}
 else if(a==='cerrar'){const x=S.tests.find(t=>t.id===S.closing),c=S.cl;
 if(c.r==='Suspendida'&&!c.obs.trim())S.msg='Escribe las observaciones para suspender la prueba.';else if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)&&!(c.admt||'').trim()&&!x.adm)S.msg='Escribe las admisiones antes de cerrar la prueba (puedes indicar «Sin admisiones»).';
-else{x.obs=c.obs.trim();if(c.links)x.drive=Object.assign({},x.drive||{},c.links);if((c.admt||'').trim())x.adm=c.admt.trim();if(c.pdf){x.pdf=c.pdf;if(c.pdff)PDFURL[x.id]=URL.createObjectURL(c.pdff);}if(x.t0){const mn=Math.round((Date.now()-x.t0)/60000);x.min=mn;if(mn>=10)x.dur=mn/60;x.hf=hhmm();(x.tl=x.tl||[]).push({k:'Fin',at:x.hf});}vivoDel('poli-'+x.id);x.t0=null;if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)){x.e='Realizada';x.r=c.r;}else{x.e=c.r;x.r='';}
+else{x.obs=c.obs.trim();if(c.links)x.drive=Object.assign({},x.drive||{},c.links);if((c.admt||'').trim())x.adm=c.admt.trim();if(c.pdf){x.pdf=c.pdf;if(c.pdff)PDFURL[x.id]=URL.createObjectURL(c.pdff);}if(x.t0){const mn=Math.round((Date.now()-x.t0)/60000);x.min=mn;if(mn>=10)x.dur=mn/60;x.hf=hhmm();(x.tl=x.tl||[]).push({k:'Fin',at:x.hf});}vivoDel('poli-'+x.id,['Aprobó','No aprobó','Inconcluso'].includes(c.r)?'':c.r);x.t0=null;if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)){x.e='Realizada';x.r=c.r;}else{x.e=c.r;x.r='';}
 S.msg='Prueba cerrada como «'+c.r+'».'+(c.r==='Reprogramar'?' El horario quedó libre en el calendario.':'');S.closing=0;}}
 else if(a==='prog'){if(isP())S.form.p=S.role;const F=S.form,lm=mails(F.lm),ce=F.ce.trim(),au=ausente(F.p,F.f,F.h);if(au){S.msg='No se puede agendar: '+PN[F.p]+' tiene permiso ('+ausTxt(au)+') en esa fecha u hora.';}else if(!F.n.trim()||!F.h){S.msg='Falta el nombre del evaluado o elegir un horario.';}
 else if(!lm.length||lm.some(m=>!okm(m))){S.msg='Revisa los correos de los líderes: escribe uno o varios separados por coma.';}

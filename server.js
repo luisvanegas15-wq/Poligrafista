@@ -306,6 +306,24 @@ app.post('/api/clave', async (req, res) => {
   } catch (e) { console.error('clave:', e.message); res.status(500).json({ ok: false, error: 'Error del servidor.' }); }
 });
 
+// ===== Avisos a Google Chat (webhook en la variable GOOGLE_CHAT_WEBHOOK) =====
+const CHAT_URL = process.env.GOOGLE_CHAT_WEBHOOK || '';
+const TIPO_VIVO = { poli: 'Poligrafía', val: 'Validación de cuentas', arq: 'Arqueo', cgm: 'Apoyo CGM' };
+async function chatAviso(texto) {
+  if (!CHAT_URL) return;
+  try {
+    const r = await fetch(CHAT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=UTF-8' }, body: JSON.stringify({ text: texto }) });
+    if (!r.ok) console.error('chat:', r.status, (await r.text()).slice(0, 150));
+  } catch (e) { console.error('chat:', e.message); }
+}
+async function nombrePoli(rol) { const r = await pool.query('SELECT nombre FROM usuarios WHERE rol = $1 LIMIT 1', [rol]); return (r.rows[0] && r.rows[0].nombre) || rol; }
+function detalleVivo(tipo, d) {
+  if (tipo === 'poli') return (d.t ? d.t.toLowerCase() : 'prueba') + (d.ciudad ? ' en ' + d.ciudad : '');
+  return d.o ? d.o : '';
+}
+const hora = () => new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
+const durTxt = t0 => { if (!t0) return ''; const m = Math.max(0, Math.round((Date.now() - +t0) / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; };
+
 // ===== Seguimiento en vivo compartido =====
 const VE_TODO = ['admin', 'analista'];
 const esPoli = rol => /^P\d+$/.test(rol || '');
@@ -332,8 +350,15 @@ app.put('/api/vivo/:id', async (req, res) => {
   const poli = String(datos.p || '');
   if (!['poli', 'val', 'arq', 'cgm'].includes(tipo) || !/^(poli|act)-\d+$/.test(id)) return res.status(400).json({ ok: false });
   if (!puedeEscribir(u, poli)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
-  const prev = await pool.query('SELECT poligrafista FROM en_vivo WHERE id = $1', [id]);
+  const prev = await pool.query('SELECT poligrafista, datos FROM en_vivo WHERE id = $1', [id]);
   if (prev.rows[0] && !puedeEscribir(u, prev.rows[0].poligrafista)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
+  const antes = prev.rows[0] && prev.rows[0].datos;
+  if (!antes || (+antes.fase || 0) !== (+datos.fase || 0)) {
+    const quien = await nombrePoli(poli), det = detalleVivo(tipo, datos), et = (datos.tl || []).slice(-1)[0];
+    chatAviso(!antes
+      ? '▶️ *' + quien + '* inició ' + TIPO_VIVO[tipo].toLowerCase() + (det ? ' · ' + det : '') + ' — ' + hora()
+      : '⏩ *' + quien + '* · ' + TIPO_VIVO[tipo] + (det ? ' (' + det + ')' : '') + ': etapa «' + ((et && et.k) || 'siguiente') + '» — ' + hora());
+  }
   await pool.query(
     `INSERT INTO en_vivo (id, tipo, poligrafista, datos, actualizado) VALUES ($1,$2,$3,$4,now())
      ON CONFLICT (id) DO UPDATE SET tipo = EXCLUDED.tipo, poligrafista = EXCLUDED.poligrafista, datos = EXCLUDED.datos, actualizado = now()`,
@@ -344,9 +369,15 @@ app.put('/api/vivo/:id', async (req, res) => {
 
 app.delete('/api/vivo/:id', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
-  const prev = await pool.query('SELECT poligrafista FROM en_vivo WHERE id = $1', [req.params.id]);
+  const prev = await pool.query('SELECT poligrafista, tipo, datos FROM en_vivo WHERE id = $1', [req.params.id]);
   if (prev.rows[0] && !puedeEscribir(u, prev.rows[0].poligrafista)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
   await pool.query('DELETE FROM en_vivo WHERE id = $1', [req.params.id]);
+  if (prev.rows[0]) {
+    const p = prev.rows[0], quien = await nombrePoli(p.poligrafista), det = detalleVivo(p.tipo, p.datos || {});
+    const estado = String(req.query.estado || '').slice(0, 30), dur = durTxt((p.datos || {}).t0);
+    const cierre = { Reprogramar: 'reprogramó', Ausente: 'registró ausencia en', Suspendida: 'suspendió' }[estado];
+    chatAviso((cierre ? '⚠️ *' + quien + '* ' + cierre + ' ' : '✅ *' + quien + '* finalizó ') + TIPO_VIVO[p.tipo].toLowerCase() + (det ? ' · ' + det : '') + (dur ? ' · duración ' + dur : '') + ' — ' + hora());
+  }
   res.json({ ok: true });
 });
 
@@ -833,6 +864,13 @@ function errDrive(res, e) {
     : 'No se pudo completar la operación en Drive.';
   res.status(e.status === 404 || e.status === 403 ? 400 : 500).json({ ok: false, error: m });
 }
+app.post('/api/chat/prueba', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  if (!CHAT_URL) return res.status(400).json({ ok: false, error: 'Falta la variable GOOGLE_CHAT_WEBHOOK en Railway.' });
+  await chatAviso('🔔 Prueba de conexión desde *Seguridad y Riesgos · Polígrafías* (' + u.nombre + ') — ' + hora());
+  res.json({ ok: true });
+});
+app.get('/api/chat/estado', async (req, res) => { const u = await conSesion(req, res); if (!u) return; res.json({ ok: true, conectado: !!CHAT_URL }); });
 app.get('/api/drive/estado', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
   res.json({ ok: true, conectado: !!SA, cuenta: SA && u.rol === 'admin' ? SA.client_email : undefined });
