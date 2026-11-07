@@ -82,6 +82,13 @@ ALTER TABLE pruebas ADD COLUMN IF NOT EXISTS creado_por TEXT;
 ALTER TABLE pruebas ALTER COLUMN fecha DROP NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS pruebas_cid_idx ON pruebas (cid);
 CREATE INDEX IF NOT EXISTS resultados_poli_idx ON resultados (poligrafista, origen);
+CREATE TABLE IF NOT EXISTS google_tokens (
+  usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+  correo TEXT,
+  refresh TEXT NOT NULL,
+  creado TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE sesiones ADD COLUMN IF NOT EXISTS via TEXT;
 CREATE TABLE IF NOT EXISTS repositorios (
   id SERIAL PRIMARY KEY,
   nombre TEXT NOT NULL,
@@ -216,13 +223,13 @@ function igualLegado(correo, clave, legado) {
   const l = Buffer.from(String(legado));
   return h.length === l.length && crypto.timingSafeEqual(h, l);
 }
-const publico = u => ({ usuario: u.usuario, nombre: u.nombre, rol: u.rol, debe_cambiar: u.debe_cambiar, permisos: u.permisos || null });
+const publico = u => ({ usuario: u.usuario, nombre: u.nombre, rol: u.rol, debe_cambiar: u.debe_cambiar && u.via_sesion !== 'google', google: u.via_sesion === 'google', permisos: u.permisos || null });
 
 async function usuarioDeSesion(req) {
   const t = leerCookie(req, COOKIE);
   if (!t || !pool) return null;
   const r = await pool.query(
-    'SELECT u.* FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token = $1 AND s.expira > now() AND u.activo',
+    'SELECT u.*, s.via AS via_sesion FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id WHERE s.token = $1 AND s.expira > now() AND u.activo',
     [t]
   );
   return r.rows[0] || null;
@@ -408,7 +415,16 @@ async function soloAdmin(req, res) {
   if (u.rol !== 'admin') { res.status(403).json({ ok: false, error: 'Solo el administrador puede hacer esto.' }); return null; }
   return u;
 }
-const filaUsuario = r => ({ id: r.id, estado: r.estado || 'activo', bloqueado: !!(r.bloqueado_hasta && new Date(r.bloqueado_hasta) > new Date()), ultimo: r.ultimo_ingreso, usuario: r.usuario, nombre: r.nombre, rol: r.rol, zona: r.zona, telefono: r.telefono, color: r.color,
+// Correo corporativo de Google (opcional): permite «Ingresar con Google» cuando difiere del usuario
+async function gCorreoValido(v, id) {
+  const c = String(v || '').trim().toLowerCase().slice(0, 120);
+  if (!c) return { v: null };
+  if (!CORREO_RE.test(c)) return { error: 'El correo de Google no es válido.' };
+  const r = await pool.query('SELECT 1 FROM usuarios WHERE id <> $2 AND (lower(usuario) = $1 OR lower(correo) = $1)', [c, id || 0]);
+  if (r.rows.length) return { error: 'Ese correo de Google ya está asignado a otro usuario.' };
+  return { v: c };
+}
+const filaUsuario = r => ({ id: r.id, estado: r.estado || 'activo', bloqueado: !!(r.bloqueado_hasta && new Date(r.bloqueado_hasta) > new Date()), ultimo: r.ultimo_ingreso, usuario: r.usuario, gcorreo: r.correo && r.correo !== r.usuario ? r.correo : '', nombre: r.nombre, rol: r.rol, zona: r.zona, telefono: r.telefono, color: r.color,
   permisos: r.permisos || null, activo: r.activo, clave: r.debe_cambiar ? 'temporal' : 'personal' });
 
 app.get('/api/usuarios', async (req, res) => {
@@ -428,6 +444,7 @@ app.post('/api/usuarios', async (req, res) => {
   if (!ROLES_OK.includes(rol)) return res.status(400).json({ ok: false, error: 'Elige un rol.' });
   const ex = await pool.query('SELECT 1 FROM usuarios WHERE usuario = $1', [correo]);
   if (ex.rows.length) return res.status(400).json({ ok: false, error: 'Ya existe un usuario con ese correo.' });
+  const gc = await gCorreoValido(b.gcorreo, 0); if (gc.error) return res.status(400).json({ ok: false, error: gc.error });
   if (rol === 'poli') {
     const m = await pool.query("SELECT COALESCE(MAX(substring(rol from 2)::int), 0) AS n FROM usuarios WHERE rol ~ '^P[0-9]+$'");
     rol = 'P' + (Math.max(4, m.rows[0].n) + 1);
@@ -436,9 +453,9 @@ app.post('/api/usuarios', async (req, res) => {
   const hash = await bcrypt.hash(clave, 12);
   const r = await pool.query(
     `INSERT INTO usuarios (usuario, nombre, rol, correo, zona, telefono, color, permisos, password_hash, debe_cambiar)
-     VALUES ($1,$2,$3,$1,$4,$5,$6,$7,$8,TRUE) RETURNING *`,
+     VALUES ($1,$2,$3,$9,$4,$5,$6,$7,$8,TRUE) RETURNING *`,
     [correo, nombre, rol, String(b.zona || '').slice(0, 60) || null, String(b.telefono || '').slice(0, 30) || null,
-     /^#[0-9a-fA-F]{6}$/.test(b.color || '') ? b.color : null, JSON.stringify(limpiarPermisos(b.permisos)), hash]
+     /^#[0-9a-fA-F]{6}$/.test(b.color || '') ? b.color : null, JSON.stringify(limpiarPermisos(b.permisos)), hash, gc.v || correo]
   );
   res.json({ ok: true, usuario: filaUsuario(r.rows[0]), clave });
 });
@@ -462,13 +479,15 @@ app.put('/api/usuarios/:id', async (req, res) => {
     }
     estado = 'activo'; activo = true;
   }
+  const gc = b.gcorreo !== undefined ? await gCorreoValido(b.gcorreo, id) : { v: cur.correo };
+  if (gc.error) return res.status(400).json({ ok: false, error: gc.error });
   if (cur.id === u.id && permisos && !permisos.includes('usr')) return res.status(400).json({ ok: false, error: 'No puedes quitarte el acceso a Usuarios.' });
   const r = await pool.query(
-    `UPDATE usuarios SET nombre=$1, zona=$2, telefono=$3, color=$4, permisos=$5, activo=$6, rol=$8, estado=$9 WHERE id=$7 RETURNING *`,
+    `UPDATE usuarios SET nombre=$1, zona=$2, telefono=$3, color=$4, permisos=$5, activo=$6, rol=$8, estado=$9, correo=$10 WHERE id=$7 RETURNING *`,
     [nombre, b.zona !== undefined ? (String(b.zona).slice(0, 60) || null) : cur.zona,
      b.telefono !== undefined ? (String(b.telefono).slice(0, 30) || null) : cur.telefono,
      b.color !== undefined ? (/^#[0-9a-fA-F]{6}$/.test(b.color) ? b.color : null) : cur.color,
-     JSON.stringify(permisos), activo, id, rolNuevo, estado]
+     JSON.stringify(permisos), activo, id, rolNuevo, estado, gc.v || cur.usuario]
   );
   if (b.activo === false) await pool.query('DELETE FROM sesiones WHERE usuario_id = $1', [id]);
   res.json({ ok: true, usuario: filaUsuario(r.rows[0]) });
@@ -820,8 +839,105 @@ async function gToken() {
   const j = await r.json(); if (!j.access_token) throw new Error('No se pudo autenticar con Google');
   tokenCache = { t: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 }; return j.access_token;
 }
+// ===== Ingreso con Google (OAuth) y Drive con la cuenta de cada usuario =====
+// Variables en Railway: GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET (cliente web de Google Cloud).
+const { AsyncLocalStorage } = require('async_hooks');
+const ctxG = new AsyncLocalStorage();
+const G_ID = process.env.GOOGLE_CLIENT_ID || '', G_SEC = process.env.GOOGLE_CLIENT_SECRET || '';
+const AUTH_URL = process.env.GOOGLE_AUTH_URL || 'https://accounts.google.com/o/oauth2/v2/auth';
+const G_SCOPE = 'openid email profile https://www.googleapis.com/auth/drive';
+const gKey = () => crypto.createHash('sha256').update('poli-oauth:' + G_SEC).digest();
+function cifrar(t) {
+  const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', gKey(), iv);
+  const d = Buffer.concat([c.update(t, 'utf8'), c.final()]);
+  return [iv, c.getAuthTag(), d].map(b => b.toString('base64')).join('.');
+}
+function descifrar(s) {
+  const [iv, tag, d] = String(s).split('.').map(x => Buffer.from(x, 'base64'));
+  const c = crypto.createDecipheriv('aes-256-gcm', gKey(), iv); c.setAuthTag(tag);
+  return Buffer.concat([c.update(d), c.final()]).toString('utf8');
+}
+const redirG = req => process.env.GOOGLE_REDIRECT_URI || (req.protocol + '://' + req.get('host') + '/api/google/callback');
+const gAcc = new Map(); // usuario_id -> { t, exp }
+async function tokenUsuario(u) {
+  if (!G_ID || !pool) return null;
+  const c = gAcc.get(u.id); if (c && Date.now() < c.exp - 60000) return c.t;
+  const row = (await pool.query('SELECT refresh FROM google_tokens WHERE usuario_id = $1', [u.id])).rows[0];
+  if (!row) return null;
+  let rt; try { rt = descifrar(row.refresh); } catch (e) { return null; }
+  const r = await fetch(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: G_ID, client_secret: G_SEC, refresh_token: rt, grant_type: 'refresh_token' }) });
+  const j = await r.json().catch(() => ({}));
+  if (!j.access_token) { if (j.error === 'invalid_grant') await pool.query('DELETE FROM google_tokens WHERE usuario_id = $1', [u.id]); return null; }
+  gAcc.set(u.id, { t: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 });
+  return j.access_token;
+}
+// Prepara el acceso a Drive de la petición: con OAuth activo se usa SIEMPRE la cuenta del usuario
+// (el llamador hace ctxG.enterWith con lo devuelto, para que aplique al resto de la petición)
+async function prepDrive(u, res) {
+  const t = await tokenUsuario(u).catch(() => null);
+  if (G_ID && !t) { res.status(400).json({ ok: false, conectar: true, error: 'Conecta tu Google Drive (botón «Conectar mi Google Drive») para usar las carpetas.' }); return null; }
+  return { t, uid: u.id };
+}
+async function driveToken() { const st = ctxG.getStore(); return (st && st.t) || gToken(); }
+
+app.get('/api/google/login', (req, res) => {
+  if (!G_ID || !G_SEC) return res.redirect('/?g=err&m=' + encodeURIComponent('El ingreso con Google aún no está configurado.'));
+  const st = crypto.randomBytes(16).toString('hex'), modo = req.query.link ? 'link' : 'login';
+  const seguro = process.env.NODE_ENV === 'development' ? '' : '; Secure';
+  res.append('Set-Cookie', `poli_gst=${st}.${modo}; HttpOnly; Path=/api/google; SameSite=Lax; Max-Age=600${seguro}`);
+  const q = new URLSearchParams({ client_id: G_ID, redirect_uri: redirG(req), response_type: 'code', scope: G_SCOPE,
+    access_type: 'offline', include_granted_scopes: 'true', state: st, prompt: modo === 'link' ? 'consent' : 'select_account' });
+  if (req.query.hint) q.set('login_hint', String(req.query.hint).slice(0, 120));
+  res.redirect(AUTH_URL + '?' + q.toString());
+});
+app.get('/api/google/callback', async (req, res) => {
+  const fin = (g, m) => { res.append('Set-Cookie', 'poli_gst=; Path=/api/google; Max-Age=0'); res.redirect('/?g=' + g + (m ? '&m=' + encodeURIComponent(m) : '')); };
+  try {
+    if (!pool || !G_ID) return fin('err', 'El ingreso con Google no está disponible.');
+    const [st, modo] = String(leerCookie(req, 'poli_gst') || '').split('.');
+    if (req.query.error) return fin('err', 'Se canceló el ingreso con Google.');
+    if (!st || st !== String(req.query.state || '')) return fin('err', 'La solicitud expiró. Intenta de nuevo.');
+    const r = await fetch(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code: String(req.query.code || ''), client_id: G_ID, client_secret: G_SEC, redirect_uri: redirG(req), grant_type: 'authorization_code' }) });
+    const j = await r.json().catch(() => ({}));
+    if (!j.id_token) { console.error('google token:', j.error || r.status); return fin('err', 'Google no confirmó tu cuenta. Intenta de nuevo.'); }
+    // El id_token llega directo de Google por HTTPS: se valida destinatario, vigencia y correo verificado
+    const info = JSON.parse(Buffer.from(j.id_token.split('.')[1], 'base64url').toString());
+    const correo = String(info.email || '').toLowerCase();
+    if (info.aud !== G_ID || !correo || info.email_verified === false || (info.exp && info.exp * 1000 < Date.now())) return fin('err', 'No se pudo verificar tu cuenta de Google.');
+    let u, g = 'ok';
+    if (modo === 'link') {
+      u = await usuarioDeSesion(req); g = 'drive';
+      if (!u) return fin('err', 'Tu sesión expiró. Ingresa de nuevo.');
+    } else {
+      u = (await pool.query('SELECT * FROM usuarios WHERE lower(usuario) = $1 OR lower(correo) = $1 ORDER BY (lower(usuario) = $1) DESC LIMIT 1', [correo])).rows[0];
+      if (!u) return fin('err', 'El correo ' + correo + ' no está registrado en la plataforma. Pide al administrador que lo agregue en Usuarios y roles.');
+      if (u.estado === 'pendiente') return fin('err', 'Tu solicitud de cuenta está pendiente de aprobación.');
+      if (!u.activo) return fin('err', 'Tu cuenta está desactivada. Contacta al administrador.');
+      await pool.query('UPDATE usuarios SET intentos = 0, bloqueado_hasta = NULL, ultimo_ingreso = now() WHERE id = $1', [u.id]);
+      const token = crypto.randomBytes(32).toString('hex');
+      await pool.query("INSERT INTO sesiones (token, usuario_id, expira, via) VALUES ($1, $2, now() + interval '" + HORAS_SESION + " hours', 'google')", [token, u.id]);
+      ponerCookie(res, token, HORAS_SESION * 3600);
+    }
+    const conDrive = String(j.scope || '').includes('/auth/drive');
+    if (conDrive && j.refresh_token) {
+      await pool.query('INSERT INTO google_tokens (usuario_id, correo, refresh) VALUES ($1,$2,$3) ON CONFLICT (usuario_id) DO UPDATE SET correo = EXCLUDED.correo, refresh = EXCLUDED.refresh, creado = now()', [u.id, correo, cifrar(j.refresh_token)]);
+    }
+    if (conDrive && j.access_token) gAcc.set(u.id, { t: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 });
+    if (modo === 'link' && !conDrive) return fin('err', 'No se autorizó el acceso a Google Drive. Intenta de nuevo y marca la casilla de Drive.');
+    fin(g);
+  } catch (e) { console.error('google callback:', e.message); fin('err', 'No se pudo completar el ingreso con Google.'); }
+});
+app.post('/api/google/desvincular', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  await pool.query('DELETE FROM google_tokens WHERE usuario_id = $1', [u.id]); gAcc.delete(u.id);
+  res.json({ ok: true });
+});
+app.get('/api/google/estado', (req, res) => res.json({ ok: true, activo: !!(G_ID && G_SEC) }));
+
 async function gApi(path, opt = {}) {
-  const t = await gToken();
+  const t = await driveToken();
   const r = await fetch(DRIVE + path, { ...opt, headers: { Authorization: 'Bearer ' + t, ...(opt.headers || {}) } });
   if (!r.ok) { const tx = await r.text(); const e = new Error('Drive ' + r.status + ': ' + tx.slice(0, 200)); e.status = r.status; throw e; }
   return r.status === 204 ? {} : r.json();
@@ -862,6 +978,15 @@ async function repoPermitido(u, id) {
 }
 function errDrive(res, e) {
   console.error('drive:', e.message);
+  const st = ctxG.getStore() || {};
+  if (st.t) {
+    const m = e.status === 404 ? 'Tu cuenta de Google no tiene acceso a esa carpeta. Pide a quien la administra que te la comparta.'
+      : e.status === 403 ? 'Tu cuenta de Google no tiene permiso de edición en esa carpeta.'
+      : e.status === 401 ? 'Tu conexión con Google venció. Vuelve a «Conectar mi Google Drive».'
+      : 'No se pudo completar la operación en Drive.';
+    if (e.status === 401) { const s2 = ctxG.getStore(); if (s2 && s2.uid) gAcc.delete(s2.uid); }
+    return res.status([401, 403, 404].includes(e.status) ? 400 : 500).json({ ok: false, error: m });
+  }
   const m = !SA ? 'Drive aún no está conectado. El administrador debe configurar la cuenta de servicio.'
     : e.status === 404 ? 'La cuenta de servicio no tiene acceso a esa carpeta. Agrégala como miembro de la unidad compartida.'
     : e.status === 403 ? 'Sin permiso en Drive para esa carpeta (revisa que la cuenta de servicio sea Administrador de contenido).'
@@ -877,10 +1002,13 @@ app.post('/api/chat/prueba', async (req, res) => {
 app.get('/api/chat/estado', async (req, res) => { const u = await conSesion(req, res); if (!u) return; res.json({ ok: true, conectado: !!CHAT_URL }); });
 app.get('/api/drive/estado', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
-  res.json({ ok: true, conectado: !!SA, cuenta: SA && u.rol === 'admin' ? SA.client_email : undefined });
+  let vinculado = false, cuentaG = null;
+  if (G_ID) { const r = (await pool.query('SELECT correo FROM google_tokens WHERE usuario_id = $1', [u.id])).rows[0]; vinculado = !!r; cuentaG = r ? r.correo : null; }
+  res.json({ ok: true, oauth: !!G_ID, vinculado, cuentaG, conectado: G_ID ? vinculado : !!SA, cuenta: SA && u.rol === 'admin' ? SA.client_email : undefined });
 });
 app.get('/api/drive/carpeta', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
+  const gx = await prepDrive(u, res); if (!gx) return; ctxG.enterWith(gx);
   try {
     const r = await repoPermitido(u, req.query.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
     const id = String(req.query.id || r.raiz);
@@ -893,23 +1021,26 @@ app.get('/api/drive/carpeta', async (req, res) => {
 // Busca o crea una ruta de subcarpetas (p. ej. ["2026", "11 NOVIEMBRE"]) dentro del repositorio
 app.post('/api/drive/ruta', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
+  const gx = await prepDrive(u, res); if (!gx) return; ctxG.enterWith(gx);
   try {
     const r = await repoPermitido(u, req.body?.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
     let id = String(req.body?.desde || r.raiz);
     if (id !== r.raiz && !(await dentroDe(id, r.raiz))) return res.status(403).json({ ok: false, error: 'Esa carpeta no pertenece al repositorio.' });
     const partes = (Array.isArray(req.body?.partes) ? req.body.partes : []).slice(0, 4), camino = [];
+    let falta = null;
     for (const p of partes) {
       const opciones = (Array.isArray(p) ? p : [p]).map(x => String(x).trim().slice(0, 120)).filter(Boolean);
       if (!opciones.length) continue;
       const hs = await hijos(id, true), norm = x => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
       const hit = hs.find(h => opciones.some(o => norm(h.name) === norm(o))) || hs.find(h => opciones.slice(1).some(o => norm(h.name).split(' ').includes(norm(o))));
-      if (hit) { id = hit.id; camino.push({ id, name: hit.name }); } else if (req.body?.soloExistentes) break; else { const c = await crearCarpeta(id, opciones[0]); id = c.id; camino.push({ id, name: opciones[0] }); }
+      if (hit) { id = hit.id; camino.push({ id, name: hit.name }); } else if (!req.body?.crear) { falta = opciones[0]; break; } else { const c = await crearCarpeta(id, opciones[0]); id = c.id; camino.push({ id, name: opciones[0] }); }
     }
-    res.json({ ok: true, id, camino });
+    res.json({ ok: true, id, camino, falta });
   } catch (e) { errDrive(res, e); }
 });
 app.post('/api/drive/nueva', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
+  const gx = await prepDrive(u, res); if (!gx) return; ctxG.enterWith(gx);
   try {
     const r = await repoPermitido(u, req.body?.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
     const padre = String(req.body?.padre || r.raiz), nombre = String(req.body?.nombre || '').trim().slice(0, 120);
@@ -921,13 +1052,14 @@ app.post('/api/drive/nueva', async (req, res) => {
 // Subida en streaming (sirve para PDF, imágenes y videos grandes): el cuerpo es el archivo
 app.post('/api/drive/subir', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
+  const gx = await prepDrive(u, res); if (!gx) return; ctxG.enterWith(gx);
   try {
     const r = await repoPermitido(u, req.query.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
     const destino = String(req.query.carpeta || r.raiz), nombre = String(req.query.nombre || 'archivo').slice(0, 200);
     if (destino !== r.raiz && !(await dentroDe(destino, r.raiz))) return res.status(403).json({ ok: false, error: 'Esa carpeta no pertenece al repositorio.' });
     const tipo = String(req.headers['content-type'] || 'application/octet-stream'), largo = req.headers['content-length'];
     if (!largo) return res.status(411).json({ ok: false, error: 'Falta el tamaño del archivo.' });
-    const t = await gToken();
+    const t = await driveToken();
     const ini = await fetch(DRIVE + '/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink', {
       method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': tipo, 'X-Upload-Content-Length': largo },
       body: JSON.stringify({ name: nombre, parents: [destino], description: 'Subido desde Polígrafías por ' + u.nombre }) });
