@@ -560,10 +560,23 @@ const sha=async x=>{if(typeof crypto!=='undefined'&&crypto.subtle){return [...ne
 ['admin','analista'].forEach(k=>MENU[k].push('imp'));LBL.imp='Importar bases reales';MC.imp='#0EA5E9';NL.imp='Importar bases';SH.imp='Importar';IC.imp='<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>';
 Object.keys(MENU).forEach(k=>MENU[k].push('clave'));LBL.clave='Cambiar contraseña';MC.clave='#64748B';
 S.pf={a:'',n:'',r:''};
-async function doLogin(){try{if(typeof crypto==='undefined'||!crypto.subtle){S.lf.e='Abre la página con https para poder iniciar sesión.';render();return;}
+/* ===== Login real (servidor + PostgreSQL). Si no hay servidor, sigue en modo demo ===== */
+let API=false;
+async function api(r,b){const o={method:b?'POST':'GET',credentials:'same-origin',headers:{}};if(b){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b);}const x=await fetch(r,o);let j={};try{j=await x.json();}catch(e){}j.status=x.status;return j;}
+function apiEntrar(us){const u=USERS.find(x=>x[0]===us.usuario)||[us.usuario,us.nombre,us.rol,''];S.user=u;S.role=u[2];S.view='dash';S.msg='';S.closing=0;S.force=!!us.debe_cambiar;S.pf={a:'',n:'',r:''};}
+async function apiIniciar(){try{const j=await api('/api/salud');if(j&&j.db==='conectada'){API=true;const y=await api('/api/yo');if(y.ok&&y.user){apiEntrar(y.user);render();}}}catch(e){}}
+async function doLogin(){if(API){try{const j=await api('/api/login',{u:S.lf.u.trim().toLowerCase(),p:S.lf.p});
+if(j.ok){apiEntrar(j.user);try{if(S.lf.rem)localStorage.setItem('poli_user',j.user.usuario);else localStorage.removeItem('poli_user');}catch(e){}S.lf={u:'',p:'',e:'',rem:S.lf.rem,show:false};}
+else S.lf.e=j.error||'Correo o contraseña incorrectos.';}catch(e){S.lf.e='No hay conexión con el servidor. Intenta de nuevo.';}render();return;}
+try{if(typeof crypto==='undefined'||!crypto.subtle){S.lf.e='Abre la página con https para poder iniciar sesión.';render();return;}
 const u=USERS.find(x=>x[0]===S.lf.u.trim().toLowerCase());let ok=false;if(u)ok=(await sha(u[0]+':'+S.lf.p))===(PW[u[0]]||u[3]);
 if(ok){S.user=u;S.role=u[2];S.view='dash';S.msg='';S.closing=0;S.force=!PW[u[0]];S.pf={a:'',n:'',r:''};try{if(S.lf.rem)localStorage.setItem('poli_user',u[0]);else localStorage.removeItem('poli_user');}catch(e){}S.lf={u:'',p:'',e:'',rem:S.lf.rem,show:false};}else S.lf.e='Correo o contraseña incorrectos.';}catch(e){S.lf.e='No se pudo verificar la clave en este navegador.';}render();}
-async function pwsave(){const u=USERS.find(x=>x[0]===S.user[0]),f=S.pf,cur=(await sha(u[0]+':'+f.a))===(PW[u[0]]||u[3]);
+async function pwsave(){if(API){const f=S.pf;
+if(f.n.length<8||!/[a-zA-Z]/.test(f.n)||!/[0-9]/.test(f.n))S.msg='La nueva clave debe tener mínimo 8 caracteres, con letras y números.';
+else if(f.n!==f.r)S.msg='Las claves nuevas no coinciden.';
+else{try{const j=await api('/api/clave',{a:f.a,n:f.n});if(j.ok){S.pf={a:'',n:'',r:''};S.msg='Clave actualizada. Úsala la próxima vez que ingreses.';S.force=false;if(S.view==='clave')S.view='dash';}else{S.msg=j.error||'No se pudo cambiar la clave.';if(j.status===401){S.user=null;S.force=false;S.lf={u:ru0(),p:'',e:S.msg,rem:true,show:false};}}}catch(e){S.msg='No hay conexión con el servidor.';}}
+render();return;}
+const u=USERS.find(x=>x[0]===S.user[0]),f=S.pf,cur=(await sha(u[0]+':'+f.a))===(PW[u[0]]||u[3]);
 if(!cur)S.msg='La clave actual no es correcta.';
 else if(f.n.length<8||!/[a-zA-Z]/.test(f.n)||!/[0-9]/.test(f.n))S.msg='La nueva clave debe tener mínimo 8 caracteres, con letras y números.';
 else if(f.n!==f.r)S.msg='Las claves nuevas no coinciden.';
@@ -638,7 +651,7 @@ else if(a==='cq')ask(d.q);
 else if(a==='cdl'){const m=S.chat.m[+d.i];if(m){const L=m.t.filter(x=>String(x).trim()).map(x=>String(x).replace(/^•\s*/,'').split(' · ')),w=Math.max(1,...L.map(r=>r.length)),A=L.map(r=>r.concat(Array(w-r.length).fill(''))),H=['Informe: '+m.q+' · '+fmt(TODAY)].concat(Array(w-1).fill('')).map((h,i)=>i?'Detalle '+i:h);saveX('informe_'+norm(m.q).replace(/[^a-z0-9]+/g,'_').slice(0,30)+'_'+TODAY,'Informe',H,A).then(()=>{S.chat.m.push({r:'b',t:['✔ '+S.msg]});render();});return;}}
 else if(a==='cs')ask(document.getElementById('cin').value);
 else if(a==='fill'){}
-else if(a==='logout'){S.user=null;S.force=false;S.msg='';S.chat.open=false;S.lf={u:ru0(),p:'',e:'',rem:true,show:false};}
+else if(a==='logout'){if(API)api('/api/logout',{}).catch(()=>{});S.user=null;S.force=false;S.msg='';S.chat.open=false;S.lf={u:ru0(),p:'',e:'',rem:true,show:false};}
 else if(a==='rs')S.rs=d.p;
 else if(a==='dnot'){const n=S.tests.filter(x=>x.f===S.dd&&x.e!=='Reprogramar').length;S.msg='Notificación enviada al administrador (simulado): programación del '+fmt(S.dd)+' de los poligrafistas, '+n+' pruebas, con el Excel adjunto.';}
 else if(a==='rsend'){const q=isP()?S.role:S.rs;S.msg='Resumen de '+PN[q]+' del '+fmt(S.dd)+' enviado al administrador y al analista (simulado): '+dayAct(q,S.dd).length+' actividades.';}
@@ -767,6 +780,7 @@ loadImp();
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='impf'&&e.target.files.length)importFiles([...e.target.files]);});
 
 render();
+apiIniciar();
 </script>
 </body>
 </html>
