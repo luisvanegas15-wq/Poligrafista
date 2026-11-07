@@ -73,6 +73,7 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permisos JSONB;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS color TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'activo';
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sin_claves BOOLEAN DEFAULT FALSE;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS intentos INTEGER DEFAULT 0;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS bloqueado_hasta TIMESTAMPTZ;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_ingreso TIMESTAMPTZ;
@@ -230,7 +231,7 @@ function igualLegado(correo, clave, legado) {
   const l = Buffer.from(String(legado));
   return h.length === l.length && crypto.timingSafeEqual(h, l);
 }
-const publico = u => ({ usuario: u.usuario, nombre: u.nombre, rol: u.rol, debe_cambiar: u.debe_cambiar && !['google', 'codigo'].includes(u.via_sesion), google: u.via_sesion === 'google', permisos: u.permisos || null });
+const publico = u => ({ usuario: u.usuario, nombre: u.nombre, rol: u.rol, debe_cambiar: u.debe_cambiar && !u.sin_claves && !['google', 'codigo'].includes(u.via_sesion), sin_claves: !!u.sin_claves, google: u.via_sesion === 'google', permisos: u.permisos || null });
 
 async function usuarioDeSesion(req) {
   const t = leerCookie(req, COOKIE);
@@ -366,6 +367,7 @@ app.post('/api/clave', async (req, res) => {
   try {
     const u = await usuarioDeSesion(req);
     if (!u) return res.status(401).json({ ok: false, error: 'Tu sesión expiró. Ingresa de nuevo.' });
+    if (u.sin_claves) return res.status(403).json({ ok: false, error: 'Tu cuenta no tiene permiso para cambiar contraseñas.' });
     const a = String(req.body?.a || ''), n = String(req.body?.n || '');
     let actualOk = false;
     if (u.password_hash) actualOk = await bcrypt.compare(a, u.password_hash);
@@ -487,7 +489,7 @@ async function gCorreoValido(v, id) {
   if (r.rows.length) return { error: 'Ese correo de Google ya está asignado a otro usuario.' };
   return { v: c };
 }
-const filaUsuario = r => ({ id: r.id, estado: r.estado || 'activo', bloqueado: !!(r.bloqueado_hasta && new Date(r.bloqueado_hasta) > new Date()), ultimo: r.ultimo_ingreso, usuario: r.usuario, gcorreo: r.correo && r.correo !== r.usuario ? r.correo : '', nombre: r.nombre, rol: r.rol, zona: r.zona, telefono: r.telefono, color: r.color,
+const filaUsuario = r => ({ id: r.id, sin_claves: !!r.sin_claves, estado: r.estado || 'activo', bloqueado: !!(r.bloqueado_hasta && new Date(r.bloqueado_hasta) > new Date()), ultimo: r.ultimo_ingreso, usuario: r.usuario, gcorreo: r.correo && r.correo !== r.usuario ? r.correo : '', nombre: r.nombre, rol: r.rol, zona: r.zona, telefono: r.telefono, color: r.color,
   permisos: r.permisos || null, activo: r.activo, clave: r.debe_cambiar ? 'temporal' : 'personal' });
 
 app.get('/api/usuarios', async (req, res) => {
@@ -544,13 +546,16 @@ app.put('/api/usuarios/:id', async (req, res) => {
   }
   const gc = b.gcorreo !== undefined ? await gCorreoValido(b.gcorreo, id) : { v: cur.correo };
   if (gc.error) return res.status(400).json({ ok: false, error: gc.error });
+  if (b.sin_claves !== undefined && !!b.sin_claves !== !!cur.sin_claves && u.sin_claves) return res.status(403).json({ ok: false, error: 'Tu cuenta no puede cambiar el permiso de contraseñas.' });
+  if (cur.id === u.id && b.sin_claves) return res.status(400).json({ ok: false, error: 'No puedes quitarte a ti mismo el permiso de contraseñas.' });
+  const sinClaves = b.sin_claves !== undefined && !u.sin_claves ? !!b.sin_claves : !!cur.sin_claves;
   if (cur.id === u.id && permisos && !permisos.includes('usr')) return res.status(400).json({ ok: false, error: 'No puedes quitarte el acceso a Usuarios.' });
   const r = await pool.query(
-    `UPDATE usuarios SET nombre=$1, zona=$2, telefono=$3, color=$4, permisos=$5, activo=$6, rol=$8, estado=$9, correo=$10 WHERE id=$7 RETURNING *`,
+    `UPDATE usuarios SET nombre=$1, zona=$2, telefono=$3, color=$4, permisos=$5, activo=$6, rol=$8, estado=$9, correo=$10, sin_claves=$11 WHERE id=$7 RETURNING *`,
     [nombre, b.zona !== undefined ? (String(b.zona).slice(0, 60) || null) : cur.zona,
      b.telefono !== undefined ? (String(b.telefono).slice(0, 30) || null) : cur.telefono,
      b.color !== undefined ? (/^#[0-9a-fA-F]{6}$/.test(b.color) ? b.color : null) : cur.color,
-     JSON.stringify(permisos), activo, id, rolNuevo, estado, gc.v || cur.usuario]
+     JSON.stringify(permisos), activo, id, rolNuevo, estado, gc.v || cur.usuario, sinClaves]
   );
   if (b.activo === false) await pool.query('DELETE FROM sesiones WHERE usuario_id = $1', [id]);
   res.json({ ok: true, usuario: filaUsuario(r.rows[0]) });
@@ -558,6 +563,7 @@ app.put('/api/usuarios/:id', async (req, res) => {
 
 app.post('/api/usuarios/:id/clave', async (req, res) => {
   const u = await soloAdmin(req, res); if (!u) return;
+  if (u.sin_claves) return res.status(403).json({ ok: false, error: 'Tu cuenta no tiene permiso para restablecer contraseñas.' });
   const clave = claveTemporal();
   const r = await pool.query('UPDATE usuarios SET password_hash=$1, hash_legado=NULL, debe_cambiar=TRUE, intentos=0, bloqueado_hasta=NULL WHERE id=$2 RETURNING *',
     [await bcrypt.hash(clave, 12), +req.params.id]);
