@@ -89,6 +89,13 @@ CREATE TABLE IF NOT EXISTS google_tokens (
   creado TIMESTAMPTZ DEFAULT now()
 );
 ALTER TABLE sesiones ADD COLUMN IF NOT EXISTS via TEXT;
+CREATE TABLE IF NOT EXISTS codigos (
+  usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+  hash TEXT NOT NULL,
+  expira TIMESTAMPTZ NOT NULL,
+  intentos INTEGER DEFAULT 0,
+  enviado TIMESTAMPTZ DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS repositorios (
   id SERIAL PRIMARY KEY,
   nombre TEXT NOT NULL,
@@ -178,7 +185,7 @@ async function initDB() {
         [usuario, nombre, rol, legado]
       );
     }
-    // Nombres reales de los poligrafistas iniciales (solo si conservan el nombre genérico)
+    // Nombres reales de los poligrafistas iniciales (solo si conservan el nombre gen)
     for (const [n, real] of [[1, 'Durley Wilches'], [2, 'Carlos Castaño'], [3, 'Luis Vanegas'], [4, 'José Barbosa']]) {
       await pool.query('UPDATE usuarios SET nombre = $1 WHERE usuario = $2 AND nombre = $3', [real, 'poligrafista' + n + '@suitepoligrafia.example', 'Poligrafista ' + n]);
     }
@@ -223,7 +230,7 @@ function igualLegado(correo, clave, legado) {
   const l = Buffer.from(String(legado));
   return h.length === l.length && crypto.timingSafeEqual(h, l);
 }
-const publico = u => ({ usuario: u.usuario, nombre: u.nombre, rol: u.rol, debe_cambiar: u.debe_cambiar && u.via_sesion !== 'google', google: u.via_sesion === 'google', permisos: u.permisos || null });
+const publico = u => ({ usuario: u.usuario, nombre: u.nombre, rol: u.rol, debe_cambiar: u.debe_cambiar && !['google', 'codigo'].includes(u.via_sesion), google: u.via_sesion === 'google', permisos: u.permisos || null });
 
 async function usuarioDeSesion(req) {
   const t = leerCookie(req, COOKIE);
@@ -280,6 +287,62 @@ app.post('/api/login', async (req, res) => {
     ponerCookie(res, token, HORAS_SESION * 3600);
     res.json({ ok: true, user: publico(u), bienvenida: { previo: u.previo || null } });
   } catch (e) { console.error('login:', e.message); res.status(500).json({ ok: false, error: 'Error del servidor.' }); }
+});
+
+// ===== Ingreso con código enviado al correo (Brevo) =====
+// Variables en Railway: BREVO_API_KEY y BREVO_SENDER (correo remitente verificado en Brevo).
+const BREVO_KEY = process.env.BREVO_API_KEY || '', BREVO_FROM = process.env.BREVO_SENDER || '';
+const BREVO_URL = process.env.BREVO_API_URL || 'https://api.brevo.com/v3/smtp/email';
+const hashCodigo = (id, c) => crypto.createHash('sha256').update(id + ':' + c + ':' + (process.env.GOOGLE_CLIENT_SECRET || 'poli')).digest('hex');
+async function enviarCorreo(para, asunto, html) {
+  const r = await fetch(BREVO_URL, { method: 'POST', headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ sender: { name: 'Seguridad y Riesgos · Polígrafías', email: BREVO_FROM }, to: [{ email: para }], subject: asunto, htmlContent: html }) });
+  if (!r.ok) throw new Error('Brevo ' + r.status + ': ' + (await r.text()).slice(0, 200));
+}
+app.get('/api/codigo/estado', (req, res) => res.json({ ok: true, activo: !!(BREVO_KEY && BREVO_FROM) }));
+app.post('/api/codigo/enviar', async (req, res) => {
+  if (!pool) return sinBD(res);
+  if (!BREVO_KEY || !BREVO_FROM) return res.status(400).json({ ok: false, error: 'El ingreso con código aún no está configurado.' });
+  const correo = String(req.body?.u || '').trim().toLowerCase().slice(0, 120);
+  if (!CORREO_RE.test(correo)) return res.status(400).json({ ok: false, error: 'Escribe un correo válido.' });
+  const k = 'cod|' + req.ip, ahora = Date.now(), reg = (intentos.get(k) || []).filter(t => ahora - t < 15 * 60e3);
+  if (reg.length >= 8) return res.status(429).json({ ok: false, error: 'Demasiadas solicitudes. Espera 15 minutos.' });
+  reg.push(ahora); intentos.set(k, reg);
+  const gen = { ok: true, msg: 'Si el correo está registrado, te llegó un código de 6 dígitos. Revisa también la carpeta de spam.' };
+  try {
+    const u = (await pool.query('SELECT * FROM usuarios WHERE (lower(usuario) = $1 OR lower(correo) = $1) AND activo ORDER BY (lower(usuario) = $1) DESC LIMIT 1', [correo])).rows[0];
+    if (!u || u.estado === 'pendiente') return res.json(gen);
+    const prev = (await pool.query("SELECT 1 FROM codigos WHERE usuario_id = $1 AND enviado > now() - interval '60 seconds'", [u.id])).rows[0];
+    if (prev) return res.status(429).json({ ok: false, error: 'Ya te enviamos un código. Espera un minuto para pedir otro.' });
+    const c = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+    await pool.query("INSERT INTO codigos (usuario_id, hash, expira, intentos, enviado) VALUES ($1,$2, now() + interval '10 minutes', 0, now()) ON CONFLICT (usuario_id) DO UPDATE SET hash = EXCLUDED.hash, expira = EXCLUDED.expira, intentos = 0, enviado = now()", [u.id, hashCodigo(u.id, c)]);
+    await enviarCorreo(correo, 'Tu código de ingreso: ' + c,
+      '<div style="font-family:Arial,sans-serif;max-width:420px;margin:auto;padding:24px;color:#0f172a"><h2 style="margin:0 0 4px;color:#0b2a5b">Seguridad y Riesgos · Polígrafías</h2><p>Hola ' + u.nombre.replace(/[<>&]/g, '') + ', tu código para ingresar es:</p><p style="font-size:34px;font-weight:700;letter-spacing:8px;margin:16px 0;color:#0b2a5b">' + c + '</p><p style="color:#64748b;font-size:13px">Vence en 10 minutos. Si no lo pediste, ignora este correo.</p></div>');
+    res.json(gen);
+  } catch (e) { console.error('codigo:', e.message); res.status(500).json({ ok: false, error: 'No se pudo enviar el código. Intenta de nuevo.' }); }
+});
+app.post('/api/codigo/verificar', async (req, res) => {
+  if (!pool) return sinBD(res);
+  const correo = String(req.body?.u || '').trim().toLowerCase(), c = String(req.body?.c || '').replace(/\D/g, '');
+  const malo = () => res.status(400).json({ ok: false, error: 'Código incorrecto o vencido.' });
+  try {
+    const u = (await pool.query('SELECT * FROM usuarios WHERE (lower(usuario) = $1 OR lower(correo) = $1) AND activo ORDER BY (lower(usuario) = $1) DESC LIMIT 1', [correo])).rows[0];
+    if (!u || c.length !== 6) return malo();
+    const k = (await pool.query('SELECT * FROM codigos WHERE usuario_id = $1 AND expira > now()', [u.id])).rows[0];
+    if (!k) return malo();
+    if (k.intentos >= 5) { await pool.query('DELETE FROM codigos WHERE usuario_id = $1', [u.id]); return res.status(429).json({ ok: false, error: 'Demasiados intentos. Pide un código nuevo.' }); }
+    const a = Buffer.from(hashCodigo(u.id, c)), b = Buffer.from(k.hash);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) { await pool.query('UPDATE codigos SET intentos = intentos + 1 WHERE usuario_id = $1', [u.id]); return malo(); }
+    await pool.query('DELETE FROM codigos WHERE usuario_id = $1', [u.id]);
+    if (u.estado === 'pendiente') return res.status(403).json({ ok: false, error: 'Tu solicitud de cuenta está pendiente de aprobación.' });
+    const previo = u.ultimo_ingreso;
+    await pool.query('UPDATE usuarios SET intentos = 0, bloqueado_hasta = NULL, ultimo_ingreso = now() WHERE id = $1', [u.id]);
+    const token = crypto.randomBytes(32).toString('hex');
+    await pool.query("INSERT INTO sesiones (token, usuario_id, expira, via) VALUES ($1, $2, now() + interval '" + HORAS_SESION + " hours', 'codigo')", [token, u.id]);
+    ponerCookie(res, token, HORAS_SESION * 3600);
+    u.via_sesion = 'codigo';
+    res.json({ ok: true, user: publico(u), bienvenida: { previo: previo || null } });
+  } catch (e) { console.error('codigo verificar:', e.message); res.status(500).json({ ok: false, error: 'Error del servidor.' }); }
 });
 
 app.get('/api/yo', async (req, res) => {
