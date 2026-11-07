@@ -297,6 +297,15 @@ main>*{flex-shrink:0}
 .cqh{background:#FEF3C7!important;color:#92400E!important;border-color:#F59E0B!important;font-weight:700}
 .sp{margin-top:8px;display:flex;flex-direction:column;gap:8px}.sp textarea{width:100%;box-sizing:border-box;min-height:70px;resize:vertical}
 .sp-b{display:flex;flex-wrap:wrap;gap:6px}.sp-b .btn{margin:0}
+.rc-st{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:#FEF2F2;border:1px solid #FCA5A5;margin:4px 0 12px}
+.rc-st>div{display:flex;flex-direction:column;gap:2px}.rc-st span{font-size:12.5px;color:var(--mut)}.rc-st .el{font-size:20px;white-space:nowrap}
+.rc-st.idle{background:var(--bg);border-color:var(--line)}
+.rc-tm{display:flex;gap:6px;align-items:stretch}.rc-tm input{flex:1;min-width:0;max-width:none}.rc-tm .btn{margin:0;white-space:nowrap}
+.rc-dz{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;padding:12px 14px;border-radius:14px;border:1px dashed var(--line);background:var(--bg)}
+.rc-dz>div{flex:1;min-width:200px;display:flex;flex-direction:column;gap:2px}.rc-dz span{font-size:12.5px;color:var(--mut)}.rc-dz .btn{margin:0}
+.rc-dz.on{border-style:solid;border-color:#F59E0B;background:#FFFBEB}
+@media(max-width:600px){.rc-card .f{grid-template-columns:1fr}.rc-st .el{font-size:16px}}
+@media(max-width:600px){#top{gap:8px}#top>div:first-child{flex:1;min-width:0}#top .ttl{font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#top>div:first-child>.mut{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#top .lo{display:none}#top .hr{gap:6px;flex:none}#top .blb{width:38px;height:38px}}
 </style>
 </head>
 <body>
@@ -540,7 +549,7 @@ S.live=[];S.lv={};
 const PH={val:['Conexión a cámaras','Revisión de cuentas','Cierre y hallazgos'],arq:['Conteo de efectivo','Cuadre con el sistema','Acta y novedades'],cgm:['Acceso a cámaras','Revisión de oficinas','Reporte a CGM y central']},LA={val:'Validación de cuentas',arq:'Arqueo',cgm:'Apoyo CGM'};
 const hhmm=()=>new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',hour12:false}).replace(/^24/,'00');
 const tlHtml=o=>{const T=o&&o.tl&&o.tl.length?o.tl:null;if(!T)return o&&o.ini&&o.fin?'<span class="tls"><span class="tlp s"><i>Inicio</i> '+o.ini+'</span><b>→</b><span class="tlp f"><i>Fin</i> '+o.fin+'</span></span>':'—';return '<span class="tls">'+T.map((st,i)=>'<span class="tlp'+(i===0?' s':st.k==='Fin'?' f':'')+'"><i>'+esc(st.k)+'</i> '+st.at+'</span>').join('<b>→</b>')+'</span>';};
-function vLive(){const own=x=>S.role==='admin'||S.role==='analista'||(isP()&&x.p===S.role),T=S.tests.filter(x=>x.e==='En curso'&&own(x)).concat((S.vivoP||[]).filter(r=>own(r)&&!S.tests.some(t=>t.id===r.id&&t.e==='En curso'))).map(x=>({c:'#EF4444',tag:'Polígrafía',n:x.n,sub:x.t+' · '+x.ciudad+' · '+PN[x.p]+' · inició '+(x.h0||x.h),F:FASES,fase:x.fase||0,t0:x.t0})),A=S.live.filter(own).map(x=>({c:MC[x.g],tag:LA[x.g],n:x.o,sub:PN[x.p]+' · inició '+x.tl[0].at,F:PH[x.g],fase:x.fase,t0:x.t0,tl:x.tl})),L=T.concat(A);
+function vLive(){const own=x=>S.role==='admin'||S.role==='analista'||(isP()&&x.p===S.role),T=S.tests.filter(x=>x.e==='En curso'&&own(x)).concat((S.vivoP||[]).filter(r=>own(r)&&!S.tests.some(t=>t.id===r.id&&t.e==='En curso'))).map(x=>({c:'#EF4444',tag:'Polígrafía',n:x.n,sub:x.t+' · '+x.ciudad+' · '+PN[x.p]+' · inició '+(x.h0||x.h),F:FASES,fase:x.fase||0,t0:x.t0})),A=S.live.filter(own).map(x=>({c:MC[x.g],tag:LA[x.g],n:x.o,sub:PN[x.p]+' · inició '+x.tl[0].at+(x.dz?' · 🚗 en desplazamiento':''),F:PH[x.g],fase:x.fase,t0:x.t0,tl:x.tl})),L=T.concat(A);
 if(!L.length)return S.role==='admin'||S.role==='analista'?'<div class="card live idle"><div class="lh2"><span class="lv off"></span><b>Actividades en ejecución</b><span class="mut">Ninguna en este momento. Aquí verás en vivo las polígrafías, validaciones, arqueos y apoyos a CGM apenas un poligrafista los inicie.</span></div></div>':'';
 return '<div class="card live"><div class="lh2"><span class="lv"></span><b>En ejecución ahora · '+L.length+'</b><span class="mut">Avance en vivo: inicio, proceso y finalización</span></div>'+L.map(x=>'<div class="lit"><div class="lin"><span class="atg" style="background:'+x.c+'22;color:'+x.c+'">'+x.tag+'</span><b>'+esc(x.n)+'</b><div class="mut">'+x.sub+'</div></div><div class="stp">'+x.F.map((f,i)=>'<span class="'+(i<x.fase?'dn':i===x.fase?'ac':'')+'"><i>'+(i<x.fase?'✓':i+1)+'</i>'+f+'</span>').join('')+'</div><div class="lt"><b class="el" data-t0="'+x.t0+'">'+elapsed(x.t0)+'</b><small>transcurrido</small></div>'+(x.tl?'<div class="ltl">'+tlHtml({tl:x.tl})+'</div>':'')+'<div class="pbar"><i style="width:'+Math.round(100*(x.fase+1)/x.F.length)+'%;background:'+x.c+'"></i></div></div>').join('')+'</div>';}
 function resAct(x){if(!canClose()||!(S.role==='admin'||x.p===S.role))return '';
@@ -567,12 +576,42 @@ function vVencOld(){return '<div class="card sc">'+tbl(['Funcionario','Cargo','�
 function fld(g,a){const v=S.rf[g][a[0]]||'',id='data-g="'+g+'" data-f="'+a[0]+'"';let c;
 if(a[2]==='area')c='<textarea '+id+' rows="3">'+esc(v)+'</textarea>';else if(a[2]==='file')c='<input type="file" '+id+'>';else if(a[2]==='sel')c='<select '+id+'>'+a[3].map(o=>'<option'+(o===v?' selected':'')+'>'+o+'</option>').join('')+'</select>';else c='<input type="'+a[2]+'" '+id+' value="'+esc(v)+'">';
 return '<label>'+a[1]+c+'</label>';}
+/* ===== Seguimiento automático desde el formulario (validaciones, arqueos, CGM) ===== */
+const PF={val:[[],['obs'],['ev']],arq:[[],['enc'],['sis','nov','pdf','atm']],cgm:[[],['n','obs'],['ev','repc','rc','repn','rcen']]};
+const PFH={val:['Pon la hora de inicio','Escribe el análisis','Adjunta la evidencia'],arq:['Pon la hora de inicio','Registra el saldo encontrado','Registra el saldo de sistema, la novedad o el PDF'],cgm:['Pon la hora de inicio','Registra las oficinas u observaciones','Adjunta evidencia o reporta a CGM / central']};
+const okT=v=>/^\d{2}:\d{2}/.test(v||'');
+function t0De(R){const d=new Date((R.f||TODAY)+'T'+R.ini);return isNaN(d)?Date.now():Math.min(Date.now(),d.getTime());}
+function faseDe(g,R){let n=0;const T=R._t||{};PF[g].forEach((fs,i)=>{if(fs.some(f=>{const def=(FC[g].find(z=>z[0]===f)||[])[2]==='sel'?FC[g].find(z=>z[0]===f)[3][0]:'';return T[f]&&R[f]&&R[f]!==def;}))n=Math.max(n,i);});return n;}
+function rfSave(){try{const o={};['val','arq','cgm'].forEach(g=>{const R=Object.assign({},S.rf[g]);FC[g].forEach(z=>{if(z[2]==='file')delete R[z[0]];});o[g]=R;});localStorage.setItem('poli_rf_'+(S.user?S.user[0]:''),JSON.stringify(o));}catch(e){}}
+function rfLoad(){try{const o=JSON.parse(localStorage.getItem('poli_rf_'+S.user[0])||'null');if(o)['val','arq','cgm'].forEach(g=>{if(o[g])S.rf[g]=o[g];});}catch(e){}}
+function liveSet(g){const R=S.rf[g],x=R._lid&&S.live.find(z=>z.id===R._lid);if(!x&&R._lid&&R._lx){S.live.push(R._lx);return R._lx;}return x;}
+function recAuto(g,f,ev){const R=S.rf[g];(R._t=R._t||{})[f]=1;const before=JSON.stringify([R._lid,(liveSet(g)||{}).fase]);
+const p=isP()?S.role:(Object.keys(PN).find(k=>PN[k]===R.p)||'P1');let x=liveSet(g),fin=false;
+if(!x&&okT(R.ini)&&!okT(R.fin)&&(f==='ini'||ev==='change')){x={id:Date.now(),g,p,o:(R.o||'').trim()||'Sin oficina',t0:t0De(R),fase:0,tl:[{k:'Inicio',at:R.ini.slice(0,5)}]};if(R._d0)x.dz=R._d0;S.live.push(x);R._lid=x.id;S.msg=LA[g]+' en vivo desde las '+R.ini.slice(0,5)+': el administrador y el analista ya la ven.';}
+if(x){x.o=(R.o||'').trim()||'Sin oficina';x.p=p;if(f==='ini'&&okT(R.ini)){x.tl[0].at=R.ini.slice(0,5);x.t0=t0De(R);}
+const nf=faseDe(g,R);while(x.fase<Math.min(nf,PH[g].length-1)){x.fase++;x.tl.push({k:PH[g][x.fase],at:hhmm()});}
+if(okT(R.fin)&&(f==='fin'&&(ev==='change'||R.fin.length>=5))){x.tl.push({k:'Fin',at:R.fin.slice(0,5)});R._tl=x.tl;S.live=S.live.filter(z=>z!==x);vivoDel('act-'+x.id);R._lid=null;R._lx=null;fin=true;S.msg=LA[g]+' finalizada ('+x.tl[0].at+' – '+R.fin.slice(0,5)+'). Revisa los datos y guarda el registro.';}
+else{R._lx=x;clearTimeout(x._tm);x._tm=setTimeout(()=>vivoA(x),400);}}
+rfSave();const after=JSON.stringify([R._lid,(x||{}).fase]);
+if(before!==after||fin||(ev==='change'&&x)){const ae=document.activeElement,k=ae&&ae.dataset&&ae.dataset.f&&ae.dataset.g?'[data-g="'+ae.dataset.g+'"][data-f="'+ae.dataset.f+'"]':null;render();if(k&&ae.type!=='file'){const n=document.querySelector(k);if(n)n.focus();}}}
+function recStrip(g){const R=S.rf[g],x=liveSet(g);
+if(!x)return '<div class="rc-st idle"><span class="lv off"></span><div><b>Seguimiento en vivo</b><span>Se inicia solo cuando pongas la <b>hora de inicio</b>. Las etapas avanzan a medida que llenas el registro.</span></div></div>';
+const nx=PFH[g][x.fase+1];return '<div class="rc-st"><span class="lv"></span><div style="flex:1;min-width:0"><b>En vivo · '+esc(x.o)+'</b><span>Inició '+x.tl[0].at+(nx?' · Siguiente: '+nx.toLowerCase():' · Pon la hora de finalización para cerrar')+'</span></div><b class="el" data-t0="'+x.t0+'">'+elapsed(x.t0)+'</b></div><div class="stp" style="margin:0 0 14px">'+PH[g].map((f,i)=>'<span class="'+(i<x.fase?'dn':i===x.fase?'ac':'')+'"><i>'+(i<x.fase?'✓':i+1)+'</i>'+f+'</span>').join('')+'</div>';}
+function fldT(g,a){const v=S.rf[g][a[0]]||'';return '<label>'+a[1]+'<span class="rc-tm"><input type="time" data-g="'+g+'" data-f="'+a[0]+'" value="'+esc(v)+'"><button type="button" class="btn sm sec" data-act="rnow" data-g="'+g+'" data-f="'+a[0]+'">Ahora</button></span></label>';}
+function dzHtml(g){const R=S.rf[g],on=!!R._d0,m=+R.d||0;return '<div class="rc-dz'+(on?' on':'')+'"><div><b>🚗 Desplazamiento</b><span>'+(on?'En curso · <b class="el" data-t0="'+R._d0+'">'+elapsed(R._d0)+'</b>':'Acumulado: <b>'+m+' min</b> · no cuenta como tiempo efectivo')+'</span></div>'+
+(on?'<button type="button" class="btn sm" data-act="dzend" data-g="'+g+'">■ Terminar desplazamiento</button>':'<button type="button" class="btn sm sec" data-act="dzgo" data-g="'+g+'">▶ Iniciar desplazamiento</button>'+(m?'<button type="button" class="lk" data-act="dzclr" data-g="'+g+'" style="width:auto;margin:0">Poner en 0</button>':''))+'</div>';}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-act]');if(!b||!/^(rnow|dzgo|dzend|dzclr)$/.test(b.dataset.act))return;e.stopImmediatePropagation();const a=b.dataset.act,g=b.dataset.g,R=S.rf[g];
+if(a==='rnow'){R[b.dataset.f]=hhmm();if(!R.f)R.f=TODAY;recAuto(g,b.dataset.f,'change');return;}
+if(a==='dzgo'){R._d0=Date.now();const x=liveSet(g);if(x){x.dz=R._d0;vivoA(x);}S.msg='Desplazamiento iniciado.';}
+if(a==='dzend'&&R._d0){const mn=Math.max(1,Math.round((Date.now()-R._d0)/60000));R.d=(+R.d||0)+mn;R._d0=null;const x=liveSet(g);if(x){delete x.dz;vivoA(x);}S.msg='Desplazamiento terminado: '+mn+' min (total '+R.d+' min).';}
+if(a==='dzclr'){R.d=0;}
+rfSave();render();},true);
 function vRec(g){const ad=S.role==='admin',fl=(ad?[['p','Poligrafista','sel',Object.values(PN)]]:[]).concat(FC[g]);
 const rows=S.rec[g].filter(r=>!isP()||r.p===S.role).sort((a,b)=>b.f.localeCompare(a.f));
-const mine=S.live.filter(x=>x.g===g&&(S.role==='admin'||S.role==='analista'||x.p===S.role)),LV=S.lv[g]||{};
+const mine=S.live.filter(x=>x.g===g&&x.id!==S.rf[g]._lid&&(S.role==='admin'||S.role==='analista'||x.p===S.role)),LV=S.lv[g]||{};
 const startC=canClose()?'<div class="card"><h3>Iniciar '+LA[g].toLowerCase()+'</h3><div class="f"><label>Oficina<input data-lv="o" data-gg="'+g+'" value="'+esc(LV.o||'')+'" placeholder="Nombre de la oficina"></label>'+(ad?'<label>Poligrafista<select data-lv="p" data-gg="'+g+'">'+PS.map(q=>'<option value="'+q+'"'+((LV.p||'P1')===q?' selected':'')+'>'+PN[q]+'</option>').join('')+'</select></label>':'')+'</div><button class="btn" type="button" data-act="lstart" data-g="'+g+'" style="margin-top:0">▶ Iniciar '+LA[g].toLowerCase()+'</button><p class="mut">El administrador y el analista ven el avance en vivo. Al finalizar se llenan solos la hora de inicio y fin.</p></div>':'';
-const minesH=mine.map(x=>'<div class="card live" style="border-left-color:'+MC[g]+'"><div class="lh2"><span class="lv"></span><b>'+esc(x.o)+'</b><span class="mut">'+PN[x.p]+'</span><b class="el" data-t0="'+x.t0+'" style="margin-left:auto;font-size:20px">'+elapsed(x.t0)+'</b></div><div class="stp" style="margin:10px 0">'+PH[g].map((f,i)=>'<span class="'+(i<x.fase?'dn':i===x.fase?'ac':'')+'"><i>'+(i<x.fase?'✓':i+1)+'</i>'+f+'</span>').join('')+'</div>'+tlHtml({tl:x.tl})+(canClose()?'<div class="tb" style="margin-top:10px">'+(x.fase<PH[g].length-1?'<button class="btn sm" type="button" data-act="lnext" data-id="'+x.id+'">Siguiente etapa ›</button>':'')+'<button class="btn sm" type="button" data-act="lend" data-id="'+x.id+'">■ Finalizar y completar registro</button></div>':'')+'</div>').join('');
-return minesH+startC+(g==='cgm'?'<p class="note">Validación mediante cámaras de seguridad de las oficinas asignadas: registra la oficina, la fecha, los hallazgos, la evidencia y los reportes a CGM y a la central.</p>'+cgmK(rows):'')+(canClose()?'<div class="card"><h3>Nuevo registro</h3><div class="f">'+fl.map(a=>fld(g,a)).join('')+'</div><p class="mut">El desplazamiento se reporta, pero no cuenta como tiempo efectivo.</p><button class="btn" type="button" data-act="rec" data-g="'+g+'" style="margin-top:0">Guardar</button></div>':'')+
+const minesH=mine.map(x=>'<div class="card live" style="border-left-color:'+MC[g]+'"><div class="lh2"><span class="lv"></span><b>'+esc(x.o)+'</b><span class="mut">'+PN[x.p]+'</span><b class="el" data-t0="'+x.t0+'" style="margin-left:auto;font-size:20px">'+elapsed(x.t0)+'</b></div><div class="stp" style="margin:10px 0">'+PH[g].map((f,i)=>'<span class="'+(i<x.fase?'dn':i===x.fase?'ac':'')+'"><i>'+(i<x.fase?'✓':i+1)+'</i>'+f+'</span>').join('')+'</div>'+tlHtml({tl:x.tl})+(x.dz?'<p class="mut" style="margin:8px 0 0">🚗 En desplazamiento</p>':'')+'</div>').join('');
+return minesH+(g==='cgm'?'<p class="note">Validación mediante cámaras de seguridad de las oficinas asignadas: registra la oficina, la fecha, los hallazgos, la evidencia y los reportes a CGM y a la central.</p>'+cgmK(rows):'')+(canClose()?'<div class="card rc-card"><h3>Nuevo registro</h3>'+recStrip(g)+'<div class="f">'+fl.map(a=>a[0]==='d'?'':(a[0]==='ini'||a[0]==='fin')?fldT(g,a):fld(g,a)).join('')+'</div>'+dzHtml(g)+'<button class="btn" type="button" data-act="rec" data-g="'+g+'" style="margin-top:12px">Guardar registro</button></div>':'')+
 '<div class="card sc"><h3>Registros</h3>'+tbl(COLS[g].map(c=>c[0]),rows.map(r=>COLS[g].map(c=>c[1](r))))+'</div>';}
 const lsG=()=>{try{return JSON.parse(localStorage.getItem('poli_fmt')||'null')}catch(e){return null}},lsS=()=>{try{localStorage.setItem('poli_fmt',JSON.stringify(S.fmt))}catch(e){S.msg='No se pudo guardar el archivo en este navegador (es muy pesado).';}};
 S.fmt=lsG()||[['Cajero','Guion de entrevista','Preempleo'],['Cajero','Matriz de evaluación','Preempleo'],['Analista','Guion de entrevista','Preempleo'],['Tesorero','Guion de entrevista','Preempleo'],['Tesorero','Guía de seguimiento','Control'],['Director de oficina','Guion de entrevista','Preempleo'],['Director de oficina','Informe de control','Control']].map((a,i)=>({id:i+1,c:a[0],n:a[1],t:a[2],f:'',u:''}));
@@ -700,12 +739,12 @@ S.pf={a:'',n:'',r:''};
 /* ===== Login real (servidor + PostgreSQL). Si no hay servidor, sigue en modo demo ===== */
 let API=false;
 async function api(r,b,m,pb){if(pb)b=pb;const o={method:m||(b?'POST':'GET'),credentials:'same-origin',headers:{}};if(b){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b);}const x=await fetch(r,o);let j={};try{j=await x.json();}catch(e){}j.status=x.status;return j;}
-function apiEntrar(us){S.perm=Array.isArray(us.permisos)?us.permisos:null;if(/^P\d/.test(us.rol)&&!PN[us.rol]){PS.push(us.rol);PN[us.rol]=us.nombre;ZONA[us.rol]=ZONA[us.rol]||'Por definir';PC[us.rol]=PC[us.rol]||'#14B8A6';}cargarEquipo();const u=[us.usuario,us.nombre,us.rol,''];S.user=u;S.role=u[2];S.view='dash';S.msg='';S.closing=0;S.force=!!us.debe_cambiar;S.pf={a:'',n:'',r:''};}
+function apiEntrar(us){setTimeout(()=>{rfLoad();['val','arq','cgm'].forEach(g=>{const R=S.rf[g];if(R._lx&&!S.live.some(z=>z.id===R._lid))S.live.push(R._lx);});},0);S.perm=Array.isArray(us.permisos)?us.permisos:null;if(/^P\d/.test(us.rol)&&!PN[us.rol]){PS.push(us.rol);PN[us.rol]=us.nombre;ZONA[us.rol]=ZONA[us.rol]||'Por definir';PC[us.rol]=PC[us.rol]||'#14B8A6';}cargarEquipo();const u=[us.usuario,us.nombre,us.rol,''];S.user=u;S.role=u[2];S.view='dash';S.msg='';S.closing=0;S.force=!!us.debe_cambiar;S.pf={a:'',n:'',r:''};}
 /* Seguimiento en vivo compartido: se guarda en el servidor y se consulta cada 8 s */
 S.vivoP=[];let VIVO_SIG='',VIVO_PEND=false;
 function vivoPut(id,tipo,datos){if(API&&S.user)api('/api/vivo/'+id,null,'PUT',{tipo,datos}).catch(()=>{});}
 function vivoP(x){vivoPut('poli-'+x.id,'poli',{id:x.id,n:x.n,t:x.t,ciudad:x.ciudad,p:x.p,h0:x.h0,fase:x.fase||0,t0:x.t0,tl:x.tl||[]});}
-function vivoA(x){vivoPut('act-'+x.id,x.g,{id:x.id,g:x.g,p:x.p,o:x.o,fase:x.fase,t0:x.t0,tl:x.tl});}
+function vivoA(x){vivoPut('act-'+x.id,x.g,{id:x.id,g:x.g,p:x.p,o:x.o,fase:x.fase,t0:x.t0,tl:x.tl,dz:x.dz||null});}
 function vivoDel(id){if(API&&S.user)api('/api/vivo/'+id,null,'DELETE').catch(()=>{});}
 async function vivoSync(){if(!API||!S.user)return;try{const j=await api('/api/vivo');if(j.status===401){S.user=null;S.force=false;S.lf={u:ru0(),p:'',e:'Tu sesión expiró. Ingresa de nuevo.',rem:true,show:false};render();return;}if(!j.ok)return;
 const sig=JSON.stringify(j.items);if(sig===VIVO_SIG&&!VIVO_PEND)return;VIVO_SIG=sig;
@@ -973,7 +1012,7 @@ else if(a==='mtreset')S.form.mt='';
 else if(a==='ccsave'){const l=mails(S.ccf!==undefined?S.ccf:CCL.join(','));if(!l.length||l.some(m=>!okm(m)))S.msg='Revisa los correos: separa varios con coma.';else{CCL=l;S.ccf=undefined;try{localStorage.setItem('poli_cc',JSON.stringify(l));}catch(e){}S.msg='Correos con copia actualizados.';}}
 else if(a==='rec'){const g=d.g,R=S.rf[g],o={};if(!R.f||!R.ini||!R.fin){S.msg='Faltan la fecha o las horas de inicio y fin.';render();return;}
 FC[g].forEach(z=>{o[z[0]]=R[z[0]]||(z[2]==='sel'?z[3][0]:'');});o.p=isP()?S.role:(Object.keys(PN).find(k=>PN[k]===R.p)||'P1');
-if(R._tl)o.tl=R._tl;S.rec[g].push(o);S.rf[g]={f:TODAY};S.msg='Registro guardado; las horas ya cuentan en el dashboard de cumplimiento.';}
+if(R._lid){S.msg='Primero pon la hora de finalización para cerrar el seguimiento en vivo.';render();return;}if(R._d0){S.msg='Termina el desplazamiento antes de guardar.';render();return;}if(R._tl)o.tl=R._tl;S.rec[g].push(o);S.rf[g]={f:TODAY};rfSave();S.msg='Registro guardado; las horas ya cuentan en el dashboard de cumplimiento.';}
 render();});
 function setv(e){const t=e.target,d=t.dataset;if(d&&d.s!==undefined){if(e.type==='change'){const vs=vrows().filter(o=>S.vf==='all'||vst(o)===S.vf);if(d.s==='all')vs.forEach(o=>{S.sel[o.x.doc]=t.checked});else S.sel[d.s]=t.checked;render();}return;}if(d&&d.l){S.lf[d.l]=t.type==='checkbox'?t.checked:t.value;return;}
 if(d&&d.pw){S.pf[d.pw]=t.value;return;}
@@ -986,7 +1025,7 @@ if(d&&d.ccf!==undefined){S.ccf=t.value;return;}
 if(d&&d.ff){if(t.type==='file'){const f=t.files[0];S.ff.file=f?f.name:'';S.ff.blob=f||null;}else S.ff[d.ff]=t.value;if(['c','q','ty'].includes(d.ff)&&e.type==='change')render();return;}if(d&&d.d){if(e.type==='change'&&t.value){S[d.d]=t.value;render();}return;}if(t.id==='role'){S.role=t.value;S.msg='';S.closing=0;render();return;}if(!d)return;
 if(d.c==='pdf'){S.cl.pdf=t.files[0]?t.files[0].name:'';S.cl.pdff=t.files[0]||null;return;}
 const v=t.type==='file'?(t.files[0]?t.files[0].name:''):t.type==='checkbox'?t.checked:t.value;
-if(d.g){S.rf[d.g][d.f]=v;return;}
+if(d.g){S.rf[d.g][d.f]=v;recAuto(d.g,d.f,e.type);return;}
 if(d.c){S.cl[d.c]=v;if(d.c==='r'&&e.type==='change')render();return;}
 if(d.f){S.form[d.f]=v;if(d.f==='p')S.form.ciudad=CIT(v)[0]||S.form.ciudad;if(d.f==='l'&&LE[v])S.form.lm=LE[v];if(e.type==='change'&&['p','ciudad','f','tipo','l','rec','aut'].includes(d.f)){if(['p','ciudad','f','tipo'].includes(d.f))S.form.h='';render();}}}
 document.addEventListener('input',setv);document.addEventListener('change',setv);
