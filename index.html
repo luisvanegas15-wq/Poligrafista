@@ -1118,7 +1118,7 @@ const dt0=f=>D(f),hh=h=>{if(!h)return '';const q=String(h).split(':');return q[0
 function rxls2(){const q=isP()?S.role:(S.rpf||'all'),L=S.tests.filter(x=>(q==='all'||x.p===q)).slice().sort((a,b)=>a.f.localeCompare(b.f)||hh(a.h).localeCompare(hh(b.h)));
 const base=x=>[+x.f.slice(8),+x.f.slice(5,7),+x.f.slice(0,4),UP(x.n),x.doc,UP(x.cargo),UP(x.ciudad),UP(x.t)];
 const H1=['DIA','MES','AÑO','NOMBRE COMPLETO','DOCUMENTO','CARGO','CIUDAD','MOTIVO','RESULTADO','Columna 10','ADMISIONES','RESPONSABLE','DATE_FECHA','PDF','FOTO EXAMINADO','Columna 1','HORA INICIO','HORA FIN'];
-const H2=['DIA','MES','AÑO','NOMBRE COMPLETO','DOCUMENTO','CARGO','CIUDAD','MOTIVO','RESULTADO','PREGUNTA CON REACCIÓN','ADMISIONES','RESPONSABLE','DATE_FECHA'];
+const H2=['DIA','MES','AÑO','NOMBRE COMPLETO','DOCUMENTO','CARGO','CIUDAD','MOTIVO','RESULTADO','PREGUNTA CON REACCION DE ENGAÑO','ADMISIONES','RESPONSABLE','DATE_FECHA'];
 const A1=L.filter(x=>x.e==='Realizada'||x.e==='Suspendida').map(x=>base(x).concat([x.r||(x.e==='Suspendida'?'Suspendida':''),x.re||'N/A',x.adm||'SIN ADMINSIONES',PN[x.p],dt0(x.f),x.pdf&&x.pdf.name?x.pdf.name:(typeof x.pdf==='string'?x.pdf:''),'',x.obs||'sin novedad',hh(x.h),hh(x.hf)]));
 const A2=L.filter(x=>x.e==='Ausente').map(x=>base(x).concat(['Ausente','N/A','N/A',PN[x.p],dt0(x.f)]));
 saveWB('BASE_RESULTADOS_'+(q==='all'?'TODOS':UP(PN[q]).split(' ').join('_')),[{n:'HISTORICO',a:[H1].concat(A1),w:[6,6,7,32,14,24,14,13,12,16,28,16,12,16,16,18,12,10]},{n:'AUSENTISMO',a:[H2].concat(A2),w:[6,6,7,32,14,24,14,13,12,20,20,16,12]}]);}
