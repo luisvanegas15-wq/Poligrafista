@@ -77,6 +77,10 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS intentos INTEGER DEFAULT 0;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS bloqueado_hasta TIMESTAMPTZ;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_ingreso TIMESTAMPTZ;
 ALTER TABLE resultados ADD COLUMN IF NOT EXISTS origen TEXT;
+ALTER TABLE pruebas ADD COLUMN IF NOT EXISTS cid BIGINT;
+ALTER TABLE pruebas ADD COLUMN IF NOT EXISTS creado_por TEXT;
+ALTER TABLE pruebas ALTER COLUMN fecha DROP NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS pruebas_cid_idx ON pruebas (cid);
 CREATE INDEX IF NOT EXISTS resultados_poli_idx ON resultados (poligrafista, origen);
 CREATE TABLE IF NOT EXISTS repositorios (
   id SERIAL PRIMARY KEY,
@@ -934,6 +938,42 @@ app.post('/api/drive/subir', async (req, res) => {
     const f = await up.json();
     res.json({ ok: true, archivo: f });
   } catch (e) { errDrive(res, e); }
+});
+
+// ===== Pruebas agendadas desde la app (compartidas entre todos los usuarios) =====
+app.get('/api/pruebas', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const base = 'SELECT datos FROM pruebas WHERE cid IS NOT NULL';
+  let r;
+  if (['admin', 'analista'].includes(u.rol)) r = await pool.query(base + ' ORDER BY fecha');
+  else if (/^P\d+$/.test(u.rol)) r = await pool.query(base + ' AND poligrafista = $1 ORDER BY fecha', [u.rol]);
+  else if (u.rol === 'th') r = await pool.query(base + " AND (tipo = 'Preempleo' OR creado_por = $1) ORDER BY fecha", [u.usuario]);
+  else if (u.rol === 'lider') r = await pool.query(base + " AND (datos->>'lm') ILIKE $1 ORDER BY fecha", ['%' + u.usuario + '%']);
+  else return res.json({ ok: true, pruebas: [] });
+  res.json({ ok: true, pruebas: r.rows.map(x => x.datos) });
+});
+app.post('/api/pruebas/guardar', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const lista = (Array.isArray(req.body?.pruebas) ? req.body.pruebas : []).slice(0, 200);
+  let ok = 0;
+  for (const x of lista) {
+    const cid = Number(x && x.id); if (!Number.isSafeInteger(cid) || cid <= 0) continue;
+    const p = String(x.p || ''), f = /^\d{4}-\d{2}-\d{2}$/.test(x.f || '') ? x.f : null;
+    const prev = (await pool.query('SELECT poligrafista, creado_por, tipo FROM pruebas WHERE cid = $1', [cid])).rows[0];
+    const puede = ['admin', 'analista'].includes(u.rol) || (/^P\d+$/.test(u.rol) && p === u.rol && (!prev || prev.poligrafista === u.rol))
+      || (u.rol === 'th' && (!prev || prev.creado_por === u.usuario || prev.tipo === 'Preempleo'));
+    if (!puede) continue;
+    const d = {};
+    for (const [k, v] of Object.entries(x)) if (JSON.stringify(v).length < 4000) d[k] = v;
+    d.app = 1; d.u = Date.now();
+    await pool.query(
+      `INSERT INTO pruebas (cid, fecha, hora, poligrafista, evaluado, cc, tipo, estado, datos, creado_por, actualizado)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now())
+       ON CONFLICT (cid) DO UPDATE SET fecha=$2, hora=$3, poligrafista=$4, evaluado=$5, cc=$6, tipo=$7, estado=$8, datos=$9, actualizado=now()`,
+      [cid, f, /^\d{1,2}:\d{2}/.test(x.h || '') ? x.h : null, p, String(x.n || '').slice(0, 120), String(x.doc || '').slice(0, 30), String(x.t || '').slice(0, 40), String(x.e || '').slice(0, 30), d, u.usuario]);
+    ok++;
+  }
+  res.json({ ok: true, guardadas: ok });
 });
 
 app.use(express.static(__dirname, { index: 'index.html', extensions: ['html'] }));
