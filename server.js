@@ -76,6 +76,8 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'activo';
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS intentos INTEGER DEFAULT 0;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS bloqueado_hasta TIMESTAMPTZ;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_ingreso TIMESTAMPTZ;
+ALTER TABLE resultados ADD COLUMN IF NOT EXISTS origen TEXT;
+CREATE INDEX IF NOT EXISTS resultados_poli_idx ON resultados (poligrafista, origen);
 CREATE TABLE IF NOT EXISTS planta (
   cedula TEXT PRIMARY KEY,
   datos JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -179,7 +181,7 @@ app.get('/api/salud', async (req, res) => {
 });
 
 // ===== Autenticación =====
-app.use((req, res, next) => req.path === '/api/planta' ? next() : express.json({ limit: '1mb' })(req, res, next));
+app.use((req, res, next) => ['/api/planta', '/api/resultados/importar'].includes(req.path) ? next() : express.json({ limit: '1mb' })(req, res, next));
 
 const COOKIE = 'poli_sid';
 const HORAS_SESION = 12;
@@ -674,6 +676,48 @@ app.delete('/api/planta', async (req, res) => {
   if (!['admin', 'analista'].includes(u.rol)) return res.status(403).json({ ok: false });
   await pool.query('DELETE FROM planta');
   res.json({ ok: true });
+});
+
+// ===== Base de resultados por poligrafista (HISTORICO / AUSENTISMO) =====
+app.get('/api/resultados', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  let r;
+  if (['admin', 'analista'].includes(u.rol)) r = await pool.query("SELECT datos FROM resultados WHERE origen = 'excel' ORDER BY fecha");
+  else if (/^P\d+$/.test(u.rol)) r = await pool.query("SELECT datos FROM resultados WHERE origen = 'excel' AND poligrafista = $1 ORDER BY fecha", [u.rol]);
+  else if (u.rol === 'th') r = await pool.query("SELECT datos FROM resultados WHERE origen = 'excel' AND datos->>'t' = 'Preempleo' ORDER BY fecha");
+  else return res.json({ ok: true, pruebas: [], resumen: [] });
+  const s = await pool.query("SELECT poligrafista, count(*)::int AS n, min(fecha) AS desde, max(fecha) AS hasta, max(creado) AS cargado FROM resultados WHERE origen = 'excel' GROUP BY poligrafista");
+  // Última prueba realizada por cédula (sin resultado ni detalles) para que todos calculen igual los vencimientos
+  const ul = await pool.query(`SELECT DISTINCT ON (cc) cc, to_char(fecha,'YYYY-MM-DD') AS f, datos->>'t' AS t, poligrafista AS p
+    FROM resultados WHERE origen = 'excel' AND datos->>'e' = 'Realizada' ORDER BY cc, fecha DESC`);
+  res.json({ ok: true, pruebas: r.rows.map(x => x.datos), resumen: s.rows, ultimas: ul.rows });
+});
+app.post('/api/resultados/importar', express.json({ limit: '10mb' }), async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const p = String(req.body?.poligrafista || '');
+  if (!/^P\d+$/.test(p)) return res.status(400).json({ ok: false, error: 'Poligrafista no válido.' });
+  const puede = ['admin', 'analista'].includes(u.rol) || u.rol === p;
+  if (!puede) return res.status(403).json({ ok: false, error: 'Solo puedes cargar tu propia base de resultados.' });
+  const filas = (Array.isArray(req.body?.filas) ? req.body.filas : []).slice(0, 20000).filter(x => x && typeof x === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(x.f || ''));
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (req.body?.reemplazar) await client.query("DELETE FROM resultados WHERE origen = 'excel' AND poligrafista = $1", [p]);
+    const limpias = filas.map(x => {
+      const d = {};
+      for (const k of ['n', 'doc', 'cargo', 'ciudad', 'f', 'h', 'hf', 't', 'e', 'r', 'adm', 'obs', 're', 'pdf', 'src', 'l'])
+        if (x[k] !== undefined && x[k] !== null) d[k] = String(x[k]).slice(0, 600);
+      d.p = p; d.imp = 1;
+      return { p, cc: d.doc || '', r: d.r || d.e || '', f: d.f, d };
+    });
+    if (limpias.length) await client.query(
+      `INSERT INTO resultados (poligrafista, cc, resultado, fecha, datos, origen)
+       SELECT x.p, x.cc, x.r, x.f::date, x.d, 'excel' FROM jsonb_to_recordset($1::jsonb) AS x(p text, cc text, r text, f text, d jsonb)`,
+      [JSON.stringify(limpias)]);
+    await client.query('COMMIT');
+    res.json({ ok: true, guardados: limpias.length });
+  } catch (e) { await client.query('ROLLBACK').catch(() => {}); console.error('resultados:', e.message); res.status(500).json({ ok: false, error: 'No se pudieron guardar los resultados.' }); }
+  finally { client.release(); }
 });
 
 app.use(express.static(__dirname, { index: 'index.html', extensions: ['html'] }));

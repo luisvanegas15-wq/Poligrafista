@@ -323,6 +323,8 @@ main>*{flex-shrink:0}
 .pm-i{display:flex;gap:10px;align-items:flex-start}.pm-i>div{display:flex;flex-direction:column}.pm-i span{font-size:12.5px;color:var(--mut)}.pm-i small{font-size:12px;color:var(--mut);font-style:italic}
 .pm-e{font-size:22px;line-height:1}.pm-rs{max-width:none;min-width:0;width:100%;box-sizing:border-box}
 @media(max-width:700px){.pm-r{grid-template-columns:1fr}}
+.vfl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 12px}.vfl label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}.vfl select,.vfl input{max-width:none;width:100%;box-sizing:border-box}
+@media(max-width:600px){.vfl{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -334,7 +336,7 @@ const CITY={'Medellín':'P1','Envigado':'P1','Rionegro':'P1','Bogotá':'P2','Tun
 const ZONA={P1:'Antioquia',P2:'Centro',P3:'Occidente',P4:'Por definir'},PN={P1:'Durley Wilches',P2:'Carlos Castaño',P3:'Luis Vanegas',P4:'José Barbosa'},PS=['P1','P2','P3','P4'];
 const SLOTS=(()=>{const r=[];for(let m=420;m<=1050;m+=30)r.push(Math.floor(m/60)+':'+String(m%60).padStart(2,'0'));return r})(),DN=['Lun','Mar','Mié','Jue','Vie','Sáb'];
 const CIT=p=>Object.keys(CITY).filter(c=>CITY[c]===p);
-const MENU={admin:['dash','cal','diaria','prog','res','resumen','venc','val','arq','cgm','form','usr'],analista:['dash','cal','diaria','res','resumen','venc','val','arq','cgm','form'],poli:['dash','cal','prog','venc','resumen','res','val','arq','cgm','form'],th:['prog','cal','res'],lider:['cal']};
+const MENU={admin:['dash','cal','diaria','prog','res','resumen','venc','val','arq','cgm','form','usr'],analista:['dash','cal','diaria','res','resumen','venc','val','arq','cgm','form'],poli:['dash','cal','prog','venc','resumen','res','val','arq','cgm','form','imp'],th:['prog','cal','res'],lider:['cal']};
 const LBL={dash:'Dashboard de cumplimiento',cal:'Calendario',prog:'Programar prueba',res:'Resultados',venc:'Vencimientos',val:'Validaciones de cuentas',arq:'Arqueos',cgm:'Apoyo CGM · cámaras',form:'Formatos de entrevista',usr:'Usuarios y roles',diaria:'Programación diaria',resumen:'Resumen de actividades'};
 const INFO={admin:'Ve y programa todo, cierra pruebas y registra validaciones, arqueos y apoyos.',analista:'Consulta y valida resultados, vencimientos, informes y formatos; saca la programación diaria de los poligrafistas en un solo archivo y notifica al administrador; no programa.',poli:'Programa y cierra sus pruebas, ve los vencimientos de su zona, registra validaciones, arqueos y apoyos, y envía su resumen diario.',th:'Programa preempleo y consulta solo las preempleo realizadas: resultado, admisión e informe. Sin formatos ni otras pruebas.',lider:'Solo ve su agenda y recibe los correos de confirmación; lo demás aparece como «Ocupado».'};
 const T=(n,doc,cargo,ciudad,f,h,t,e,r,l,adm)=>({id:0,n,doc,cargo,ciudad,f,h,t,p:CITY[ciudad],e,r,l,adm:adm||'',obs:''});
@@ -398,6 +400,7 @@ function vis(){let t=S.tests.slice();const r=S.role;if(r==='th')t=t.filter(x=>x.
 const BTEST=[['Fecha de poligrafia Preempleo','Preempleo','DT PREEMPLEO'],['Fecha poligrafia pre-control','Control','PRECONTROL'],['Fecha Poligrafia control 2024','Control','CONTROL 2024'],['Fecha Poligrafia control 2025','Control','CONTROL 2025'],['Fecha Poligrafia control 2026','Control','CONTROL 2026']];
 const RET=/retir|inactiv|desvincul|liquidad/i;
 function vrows(){const last={};S.tests.filter(x=>x.e==='Realizada').forEach(x=>{const k=ck(x.doc)||x.doc;if(!last[k]||x.f>last[k].f)last[k]=x;});
+Object.keys(S.ult||{}).forEach(k=>{const u=S.ult[k];if(S.planta[k]&&(!last[k]||u.f>last[k].f))last[k]={doc:u.cc,f:u.f,t:u.t||'Control',p:u.p,r:'',n:'',e:'Realizada'};});
 const out={};
 Object.keys(S.planta).forEach(k=>{const P=S.planta[k];if(RET.test(P['STATUS PLANTA']||''))return;
 let bt=null;BTEST.forEach(([fc,t,rc])=>{const f=nd(P[fc]);if(f&&(!bt||f>bt.f))bt={f,t,r:tcase(P[rc]||'')};});
@@ -407,7 +410,16 @@ const x=Object.assign({},useApp?at:{f:bt?bt.f:'',t:bt?bt.t:'Control',r:bt?bt.r:'
 const pa=nd(P['PROGRAMAR ANTES DE']);let nx=useApp||!pa?(x.f?addM(x.f,x.t==='Preempleo'?6:12):''):pa;
 out[k]={x,nx,d:nx?dd(nx,TODAY):-99999,sf:!nx};});
 Object.keys(last).forEach(k=>{if(out[k]||S.planta[k])return;const x=last[k],nx=addM(x.f,x.t==='Preempleo'?6:12);out[k]={x,nx,d:dd(nx,TODAY)};});
-return Object.values(out).filter(o=>!isP()||o.x.p===S.role||CITY[o.x.ciudad]===S.role).sort((a,b)=>a.d-b.d);}
+return Object.values(out).sort((a,b)=>a.d-b.d);}
+const zonaDe=o=>{const P=plDe(o.x.doc);return tcase((P&&P.ZONA)||ZONA[o.x.p]||'');};
+function vrowsF(){if(S.vfp===undefined)S.vfp=isP()?S.role:'all';if(S.vfz===undefined)S.vfz='all';const q=(S.vfq||'').trim().toUpperCase();
+return vrows().filter(o=>(S.vfp==='all'||o.x.p===S.vfp||(!o.x.p&&CITY[o.x.ciudad]===S.vfp))&&(S.vfz==='all'||zonaDe(o)===S.vfz)&&(!q||UP(o.x.n).includes(q)||String(o.x.doc).includes(q)));}
+function vFiltros(){const zs=[...new Set(vrows().map(zonaDe).filter(Boolean))].sort();
+return '<div class="vfl"><label>Poligrafista<select data-vfx="vfp"><option value="all">Todos</option>'+PS.map(q=>'<option value="'+q+'"'+(S.vfp===q?' selected':'')+'>'+esc(PN[q])+(isP()&&q===S.role?' (yo)':'')+'</option>').join('')+'</select></label>'+
+'<label>Zona<select data-vfx="vfz"><option value="all">Todas</option>'+zs.map(z=>'<option'+(S.vfz===z?' selected':'')+'>'+esc(z)+'</option>').join('')+'</select></label>'+
+'<label>Buscar<input data-vfx="vfq" placeholder="Nombre o cédula" value="'+esc(S.vfq||'')+'"></label></div>';}
+document.addEventListener('change',e=>{const d=e.target&&e.target.dataset;if(d&&d.vfx&&d.vfx!=='vfq'){S[d.vfx]=e.target.value;S.pg.venc=1;S.sel={};render();}});
+document.addEventListener('input',e=>{const d=e.target&&e.target.dataset;if(d&&d.vfx==='vfq'){S.vfq=e.target.value;S.pg.venc=1;clearTimeout(S._vfqt);S._vfqt=setTimeout(()=>{render();const n=document.querySelector('[data-vfx=vfq]');if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length);}},350);}});
 const dur=(a,b)=>{const m=s=>{const q=s.split(':');return +q[0]*60+ +q[1]};return Math.max(0,m(b)-m(a))/60};
 const inW=r=>r.f>=WK0&&r.f<=WK1;
 function stats(p){const ts=S.tests.filter(x=>x.p===p),due=ts.filter(x=>x.f<=TODAY),ok=due.filter(x=>x.e==='Realizada').length,wt=ts.filter(x=>inW(x)&&(x.e==='Programada'||x.e==='Realizada'||x.e==='En curso'));
@@ -595,11 +607,11 @@ return vLive()+pn+rbar+'<div class="card sc">'+tbl(h,ps2.map(x=>{const r=[fmt(x.
 
 const vst=o=>o.d<0?'bad':o.d<=30?'wa':'ok';
 function ql(i){const q=S.queue[i];if(!q)return;Object.assign(S.form,{tipo:'Control',n:q.n,doc:q.doc,cargo:q.cargo,l:q.l,p:CITY[q.ciudad],ciudad:q.ciudad,f:q.nx>=TODAY?q.nx:TODAY,h:''});}
-function vVenc(){const all=vrows(),f=S.vf,rows=all.filter(o=>f==='all'||vst(o)===f),n=rows.filter(o=>S.sel[o.x.doc]).length,ad=S.role==='admin';
+function vVenc(){const all=vrowsF(),f=S.vf,rows=all.filter(o=>f==='all'||vst(o)===f),n=rows.filter(o=>S.sel[o.x.doc]).length,ad=S.role==='admin';
 const tl=(k,t,c,n,sub)=>'<button type="button" class="vt'+(f===k?' on':'')+'" data-act="vf" data-k="'+k+'" style="--vc:'+c+'"><b>'+n+'</b><span>'+t+'</span><small>'+sub+'</small></button>';
 const pgv=pager('venc',rows.length),vrows2=rows.slice(pgv.start,pgv.end);
 return '<div class="vts">'+tl('all','Todas','#0F4C9A',all.length,'Seguimiento completo')+tl('bad','Vencidas / sin historial','#B4162F',all.filter(o=>vst(o)==='bad').length,'Requieren programación')+tl('wa','Por vencer','#B45309',all.filter(o=>vst(o)==='wa').length,'En los próximos 30 días')+tl('ok','Vigentes','#0B6B49',all.filter(o=>vst(o)==='ok').length,'Al día, más de 30 días')+'</div>'+
-(isP()?'<p class="note" style="margin:0 0 12px">Vencimientos de tu zona: <b>'+esc(ZONA[S.role]||'')+'</b>'+(CIT(S.role).length?' ('+CIT(S.role).join(', ')+')':'')+'. Selecciona funcionarios y toca «Programar seleccionados» para agendarlos contigo.</p>':'')+'<div class="tb">'+(ad||isP()?'<button class="btn sm" type="button" data-act="toprog"'+(n?'':' disabled')+'>Programar seleccionados ('+n+')</button>':'')+'<button class="btn sm" type="button" data-act="xls">Descargar Excel ('+(n||rows.length)+')</button><span class="mut">Sin selección se descargan todos los visibles, ordenados por líder y con una columna para su disponibilidad.</span></div>'+
+vFiltros()+(isP()?'<p class="note" style="margin:0 0 12px">Ves toda la base de vencimientos; por defecto se filtra con tu nombre. Selecciona funcionarios y toca «Programar seleccionados» para agendarlos contigo.</p>':'')+'<div class="tb">'+(ad||isP()?'<button class="btn sm" type="button" data-act="toprog"'+(n?'':' disabled')+'>Programar seleccionados ('+n+')</button>':'')+'<button class="btn sm" type="button" data-act="xls">Descargar Excel ('+(n||rows.length)+')</button><span class="mut">Sin selección se descargan todos los visibles, ordenados por líder y con una columna para su disponibilidad.</span></div>'+
 (API&&!S.plInfo.total&&(ad||S.role==='analista')?'<p class="note" style="margin:0 0 12px">Las columnas de planta (CONTRATO, REGIONAL, CLIENTE, C.C…) salen vacías en el Excel hasta que importes tu <b>Base de vencimientos</b> en Importar bases.</p>':'')+'<div class="card sc">'+tbl(['<input type="checkbox" class="chk" data-s="all" aria-label="Seleccionar todos"'+(rows.length&&n===rows.length?' checked':'')+'>','Funcionario','Cédula','Ciudad','Oficina','Líder','Próximo vencimiento','Estado'],vrows2.map(o=>['<input type="checkbox" class="chk" data-s="'+esc(o.x.doc)+'" aria-label="Seleccionar '+esc(o.x.n)+'"'+(S.sel[o.x.doc]?' checked':'')+'>','<b>'+esc(UP(o.x.n))+'</b>',esc(o.x.doc),esc(o.x.ciudad||'—'),esc(o.x.of||(plDe(o.x.doc)||{}).OFICINA||'—'),esc(o.x.l||'—'),o.nx?fmt(o.nx):'Sin fecha',o.sf?pill('bad','Sin historial'):o.d<0?pill('bad','Vencida'):o.d<=30?pill('wa','Vence en '+o.d+' días'):pill('ok','Vigente')]))+'</div>'+pgv.html+'<p class="mut">Preempleo → control a los 6 meses; control → anual; inconclusa se trata como aprobó (como en la base). Hoy: '+fmt(TODAY)+'.</p>';}
 function vVencOld(){return '<div class="card sc">'+tbl(['Funcionario','Cargo','Última prueba','Resultado','Próximo vencimiento','Estado'],vrows().map(o=>[esc(o.x.n),esc(o.x.cargo),o.x.t+' · '+fmt(o.x.f),rp(o.x),fmt(o.nx),o.sf?pill('bad','Sin historial'):o.d<0?pill('bad','Vencida'):o.d<=30?pill('wa','Vence en '+o.d+' días'):pill('ok','Vigente')]))+'</div><p class="mut">Preempleo → control a los 6 meses; control → anual; inconclusa se trata como aprobó (como en la base). Hoy: '+fmt(TODAY)+'.</p>';}
 function fld(g,a){const v=S.rf[g][a[0]]||'',id='data-g="'+g+'" data-f="'+a[0]+'"';let c;
@@ -847,9 +859,9 @@ if(b.dataset.t==='ayuda'&&x&&x.de){A.open=false;msjAbrir(x.de);}
 else if(b.dataset.t==='permiso'){S.view='perm';S.pm.list=null;A.open=false;}
 else if((b.dataset.t==='registro'||b.dataset.t==='acceso')&&menuDe().includes('usr')){S.view='usr';S.au.list=null;S.au.fail=false;A.open=false;}}
 render();},true);
-async function apiIniciar(){try{const j=await api('/api/salud');if(j&&j.db==='conectada'){API=true;const y=await api('/api/yo');if(y.ok&&y.user){apiEntrar(y.user);render();vivoSync();avSync();msjSync();paCargar();plCargar();}}}catch(e){}}
+async function apiIniciar(){try{const j=await api('/api/salud');if(j&&j.db==='conectada'){API=true;const y=await api('/api/yo');if(y.ok&&y.user){apiEntrar(y.user);render();vivoSync();avSync();msjSync();paCargar();plCargar();resCargar();}}}catch(e){}}
 async function doLogin(){if(API){try{const j=await api('/api/login',{u:S.lf.u.trim().toLowerCase(),p:S.lf.p});
-if(j.ok){apiEntrar(j.user);S.welcome=j.bienvenida||{};setTimeout(()=>{vivoSync();avSync();msjSync();paCargar();plCargar();setTimeout(wlRender,600);},300);try{if(S.lf.rem)localStorage.setItem('poli_user',j.user.usuario);else localStorage.removeItem('poli_user');}catch(e){}S.lf={u:'',p:'',e:'',rem:S.lf.rem,show:false};}
+if(j.ok){apiEntrar(j.user);S.welcome=j.bienvenida||{};setTimeout(()=>{vivoSync();avSync();msjSync();paCargar();plCargar();resCargar();setTimeout(wlRender,600);},300);try{if(S.lf.rem)localStorage.setItem('poli_user',j.user.usuario);else localStorage.removeItem('poli_user');}catch(e){}S.lf={u:'',p:'',e:'',rem:S.lf.rem,show:false};}
 else S.lf.e=j.error||'Correo o contraseña incorrectos.';}catch(e){S.lf.e='No hay conexión con el servidor. Intenta de nuevo.';}render();return;}
 try{if(typeof crypto==='undefined'||!crypto.subtle){S.lf.e='Abre la página con https para poder iniciar sesión.';render();return;}
 const u=USERS.find(x=>x[0]===S.lf.u.trim().toLowerCase());let ok=false;if(u)ok=(await sha(u[0]+':'+S.lf.p))===(PW[u[0]]||u[3]);
@@ -1094,7 +1106,7 @@ else if(a==='rec'){const g=d.g,R=S.rf[g],o={};if(!R.f||!R.ini||!R.fin){S.msg='Fa
 FC[g].forEach(z=>{o[z[0]]=R[z[0]]||(z[2]==='sel'?z[3][0]:'');});o.p=isP()?S.role:(Object.keys(PN).find(k=>PN[k]===R.p)||'P1');
 if(R._lid){S.msg='Primero pon la hora de finalización para cerrar el seguimiento en vivo.';render();return;}if(R._d0){S.msg='Termina el desplazamiento antes de guardar.';render();return;}if(R._tl)o.tl=R._tl;S.rec[g].push(o);S.rf[g]={f:TODAY};rfSave();S.msg='Registro guardado; las horas ya cuentan en el dashboard de cumplimiento.';}
 render();});
-function setv(e){const t=e.target,d=t.dataset;if(d&&d.s!==undefined){if(e.type==='change'){const vs=vrows().filter(o=>S.vf==='all'||vst(o)===S.vf);if(d.s==='all')vs.forEach(o=>{S.sel[o.x.doc]=t.checked});else S.sel[d.s]=t.checked;render();}return;}if(d&&d.l){S.lf[d.l]=t.type==='checkbox'?t.checked:t.value;return;}
+function setv(e){const t=e.target,d=t.dataset;if(d&&d.s!==undefined){if(e.type==='change'){const vs=vrowsF().filter(o=>S.vf==='all'||vst(o)===S.vf);if(d.s==='all')vs.forEach(o=>{S.sel[o.x.doc]=t.checked});else S.sel[d.s]=t.checked;render();}return;}if(d&&d.l){S.lf[d.l]=t.type==='checkbox'?t.checked:t.value;return;}
 if(d&&d.pw){S.pf[d.pw]=t.value;return;}
 if(d&&d.bf!==undefined){S.bf[d.bf]=t.type==='checkbox'?t.checked:t.value;if(d.bf==='p'||d.bf==='f')S.queue.forEach(q=>q.h='');if(e.type==='change')render();return;}
 if(d&&d.bq!==undefined){const q=S.queue[+d.bq];if(q)q[d.k]=t.type==='checkbox'?t.checked:t.value;if(e.type==='change'&&d.k!=='ce')render();return;}
@@ -1132,7 +1144,7 @@ function vbase(o){const x=o.x,T=S.tests.filter(t=>ck(t.doc)===ck(x.doc)&&t.e==='
 const m={'CEDULA':x.doc,'NOMBRE':UP(x.n),'CARGO':UP(x.cargo),'ZONA':ZONA[x.p],'CIUDAD':UP(x.ciudad),'SUPERVISOR / GERENTE':UP(x.l),'Fecha de poligrafia Preempleo':z(pre),'DT PREEMPLEO':rr(pre),'AÑO1':yy(pre),'Fecha Poligrafia control 2024':z(c24),'CONTROL 2024':rr(c24),'AÑO3':yy(c24),'Fecha Poligrafia control 2025':z(c25),'CONTROL 2025':rr(c25),'AÑO':yy(c25),'Fecha Poligrafia control 2026':z(c26),'CONTROL 2026':rr(c26),'AÑO4':yy(c26),'CONCEPTO DE PROGRAMACION':o.sf?'SIN HISTORIAL':o.d<0?'VENCIDA':o.d<=30?'POR VENCER':'VIGENTE','FECHA':o.nx?dt0(o.nx):'','REACCIÓN DE ENGAÑO':x.re||'','ADMISIONES':x.adm||'','POLIGRAFISTA ASIGNADO':UP(PN[x.p]),'CIUDAD OFICINA':UP(x.ciudad),'PROGRAMAR ANTES DE':o.nx?dt0(o.nx):'','ESTADO':o.sf?'SIN HISTORIAL':o.d<0?'VENCIDA':o.d<=30?'POR VENCER':'VIGENTE'};
 const P=plDe(x.doc);if(P){const ST=['CONCEPTO DE PROGRAMACION','FECHA','PROGRAMAR ANTES DE','ESTADO','POLIGRAFISTA ASIGNADO'];Object.keys(P).forEach(k=>{const v=/^\d{4}-\d{2}-\d{2}$/.test(P[k])?dt0(P[k]):P[k];if(ST.includes(k)&&m[k]!==undefined&&m[k]!==''&&!(k==='POLIGRAFISTA ASIGNADO'))return;if(m[k]===undefined||m[k]===''||m[k]===null||['NOMBRE','CARGO','ZONA','CIUDAD','CIUDAD#2','CIUDAD OFICINA','SUPERVISOR / GERENTE','REACCIÓN DE ENGAÑO','ADMISIONES','POLIGRAFISTA ASIGNADO'].includes(k))m[k]=v;});}else m['CIUDAD#2']=m['CIUDAD'];
 return HBASE.map(h=>m[h]===undefined?'':m[h]);}
-async function xls(){const all=vrows().filter(o=>S.vf==='all'||vst(o)===S.vf),pick=all.filter(o=>S.sel[o.x.doc]),rows=(pick.length?pick:all).slice().sort((a,b)=>a.x.l.localeCompare(b.x.l)||a.d-b.d);
+async function xls(){const all=vrowsF().filter(o=>S.vf==='all'||vst(o)===S.vf),pick=all.filter(o=>S.sel[o.x.doc]),rows=(pick.length?pick:all).slice().sort((a,b)=>a.x.l.localeCompare(b.x.l)||a.d-b.d);
 const H=HBASE.map(c=>c.replace('#2','')).concat(['DISPONIBILIDAD DEL LÍDER (fecha y hora)']),A=rows.map(o=>vbase(o).concat(['']));
 try{const dl=await dlh();if(!dl){S.msg='La descarga no está disponible en esta vista.';render();return;}
 let name='BASE_VENCIMIENTOS_'+TODAY,data;
@@ -1145,9 +1157,10 @@ render();}
 (()=>{const real=iso(new Date()),sh=7*Math.round((D(mondayOf(real))-D('2026-10-26'))/(7*864e5));TODAY=real;WK0=mondayOf(real);WK1=addD(WK0,5);
 if(sh){S.tests.forEach(x=>x.f=addD(x.f,sh));['val','arq','cgm'].forEach(g=>S.rec[g].forEach(r=>r.f=addD(r.f,sh)));}
 S.dd=TODAY;S.cd=TODAY;S.form.f=addD(TODAY,1);S.rf.val.f=S.rf.arq.f=S.rf.cgm.f=TODAY;})();
-S.imp={tests:[],log:[],busy:false};
+S.imp={tests:[],log:[],busy:false};S.resSrv=null;
+function hn(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim();}
 const tcase=s=>String(s||'').trim().toLowerCase().replace(/(^|[\s.])\S/g,m=>m.toUpperCase());
-const pOf=s=>/durley|wilches/i.test(s)?'P1':/carlos|casta/i.test(s)?'P2':/luis|vanegas/i.test(s)?'P3':/jos[eé]|barbosa/i.test(s)?'P4':'';
+const pOf=s=>{const t=hn(s);if(!t)return '';const base=/DURLEY|WILCHES/.test(t)?'P1':/CARLOS|CASTANO/.test(t)?'P2':/LUIS|VANEGAS/.test(t)?'P3':/JOSE|BARBOSA/.test(t)?'P4':'';if(base)return base;return PS.find(q=>{const w=hn(PN[q]).split(' ').filter(x=>x.length>3);return w.length&&w.some(x=>t.includes(x));})||'';};
 const nd=v=>{if(typeof v==='number'&&v>20000)return new Date(Math.round((Math.floor(v)-25569)*864e5)).toISOString().slice(0,10);
 if(v instanceof Date)return iso(v);const m=String(v||'').match(/(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2]+'-'+m[3];const q=String(v||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);return q?q[3]+'-'+q[2].padStart(2,'0')+'-'+q[1].padStart(2,'0'):'';};
 const nh=v=>{if(typeof v==='number'){const m=Math.round((v%1)*1440);return Math.floor(m/60)+':'+String(m%60).padStart(2,'0');}const m=String(v||'').match(/(\d{1,2}):(\d{2})/);return m?(+m[1])+':'+m[2]:'';};
@@ -1171,7 +1184,7 @@ log.push(fname+': '+n+' citas de programación semanal');}
 /* ===== Datos de planta desde la base de vencimientos (se guardan en el servidor) ===== */
 S.planta={};S.plInfo={total:0,actualizado:null};
 const PCOLS=["FECHA DE INGRESO","CONTRATO","TIPO DE EMPLEADO","REGIONAL","C.C","C.C HELISA","UNIDAD DE NEGOCIO","CLIENTE","EMPRESA","OFICINA","STATUS PLANTA","FUERO","PERIODO DE PRUEBA","DEPARTAMENTO","FILTRO PROGRAMACION","Alertamiento Vinculación","CONCEPTO2","NOMBRE","CARGO","ZONA","CIUDAD","SUPERVISOR / GERENTE","CIUDAD OFICINA"];
-const hn=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/\s+/g,' ').trim();
+
 const ck=c=>String(c||'').replace(/\D/g,'').replace(/^0+/,'');
 function parsePlanta(wb,fname,log){const res=[];wb.SheetNames.forEach(sn=>{const R=rowsOf(wb.Sheets[sn]);let hi=-1;
 for(let i=0;i<Math.min(15,R.length);i++){const hs=(R[i]||[]).map(hn);if(hs.includes('CEDULA')&&(hs.includes('CONTRATO')||hs.includes('REGIONAL')||hs.includes('SUPERVISOR / GERENTE'))){hi=i;break;}}
@@ -1192,13 +1205,23 @@ if(pl.length&&!wb.Sheets['HISTORICO']&&!wb.SheetNames.some(s=>pOf(s))){}else if(
 const key=x=>[x.doc||x.n,x.f,x.h,x.p].join('|'),done=new Set(out.filter(x=>x.src==='HISTORICO'||x.src==='AUSENTISMO').map(x=>x.doc+'|'+x.f));
 const base=S.imp.tests.filter(x=>!out.some(o=>key(o)===key(x)));
 let all=base.concat(out.filter(x=>!(x.src==='PROG'&&done.has(x.doc+'|'+x.f)))),seen=new Set();all=all.filter(x=>{const k=key(x)+'|'+x.src;if(seen.has(k))return false;seen.add(k);return true;});
-if(PL.length)await plSubir(PL,log);if(all.length){S.imp.tests=all;applyImp();saveImp();}S.imp.log=log;S.imp.busy=false;render();}
+if(PL.length){if(S.role==='admin'||S.role==='analista'||!API)await plSubir(PL,log);else log.push('La base de vencimientos solo la puede cargar el administrador o el analista.');}
+const RS=out.filter(x=>x.src==='HISTORICO'||x.src==='AUSENTISMO');
+if(API&&RS.length){const by={};RS.forEach(x=>{(by[x.p]=by[x.p]||[]).push(x);});
+for(const p of Object.keys(by)){if(isP()&&p!==S.role){log.push('Se omitieron '+by[p].length+' pruebas de '+(PN[p]||p)+': solo puedes cargar tu propia base.');continue;}
+const j=await api('/api/resultados/importar',{poligrafista:p,filas:by[p],reemplazar:true}).catch(()=>({}));
+log.push(j.ok?'Base de resultados de '+(PN[p]||p)+' guardada en la base de datos: '+j.guardados+' pruebas (reemplaza la carga anterior de '+(PN[p]||p)+').':'No se pudo guardar la base de '+(PN[p]||p)+': '+(j.error||'sin conexión')+'.');}
+S.imp.tests=all.filter(x=>x.src==='PROG');saveImp();await resCargar();}
+else if(all.length){S.imp.tests=all;applyImp();saveImp();}
+S.imp.log=log;S.imp.busy=false;render();}
+async function resCargar(){if(!API||!S.user)return;try{const j=await api('/api/resultados');if(!j.ok)return;S.resSrv=j.resumen||[];S.ult={};(j.ultimas||[]).forEach(u=>{S.ult[ck(u.cc)]=u;});const prog=(S.imp.tests||[]).filter(x=>x.src==='PROG');
+const T=(j.pruebas||[]).concat(prog);if(T.length){S.imp.tests=T;applyImp();S.imp.tests=prog;}render();}catch(e){}}
 function applyImp(){if(!S.imp.tests.length)return;TODAY=iso(new Date());WK0=mondayOf(TODAY);WK1=addD(WK0,5);S.dd=TODAY;S.cd=TODAY;S.rs=S.rs;S.form.f=addD(TODAY,1);S.rf.val.f=S.rf.arq.f=S.rf.cgm.f=TODAY;S.tests=S.imp.tests.map((x,i)=>Object.assign({},x,{id:i+1}));}
-function saveImp(){try{localStorage.setItem('poli_imp',JSON.stringify(S.imp.tests));}catch(e){S.imp.log.push('Aviso: los datos son muy grandes para guardarse en este navegador; se perderán al recargar.');}}
+function saveImp(){try{localStorage.setItem('poli_imp',JSON.stringify(API?S.imp.tests.filter(x=>x.src==='PROG'):S.imp.tests));}catch(e){S.imp.log.push('Aviso: los datos son muy grandes para guardarse en este navegador; se perderán al recargar.');}}
 function loadImp(){try{const v=JSON.parse(localStorage.getItem('poli_imp')||'null');if(v&&v.length){S.imp.tests=v;v.forEach(x=>{if(x.ciudad&&!CITY[x.ciudad])CITY[x.ciudad]=x.p;});applyImp();}}catch(e){}}
-function vImp(){const T=S.imp.tests,c=(a)=>T.filter(a).length,ad=S.role==='admin'||S.role==='analista';
+function vImp(){const T=S.tests.filter(x=>x.imp),c=(a)=>T.filter(a).length,ad=S.role==='admin'||S.role==='analista'||isP();
 return '<div class="card"><h3>Vincular bases reales</h3><p class="mut">Selecciona tus archivos de Excel: <b>Base de resultados</b> (hojas HISTORICO y AUSENTISMO), <b>Programación de polígrafías</b> (hojas por poligrafista) y/o la <b>Base de vencimientos</b> (de ella se toman CONTRATO, REGIONAL, CLIENTE, C.C y los demás datos de planta, cruzados por cédula). Resultados y programación se leen solo en este navegador. Los <b>datos de planta</b> se guardan en la base de datos privada de la app (nunca en GitHub) para que todos los usuarios autorizados los vean.</p>'+(API?'<p class="note" style="margin:0 0 12px">Datos de planta vinculados: <b>'+S.plInfo.total+'</b> funcionarios'+(S.plInfo.actualizado?' · actualizados el '+new Date(S.plInfo.actualizado).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')+(S.plInfo.total&&ad?' · <button type="button" class="lk" data-act="plclr" style="display:inline;width:auto;margin:0">Borrar datos de planta</button>':'')+'</p>':'')+
-(ad?'<label class="btn" style="display:inline-flex;align-items:center;justify-content:center;padding:0 18px;cursor:pointer">Elegir archivos Excel<input id="impf" type="file" accept=".xlsx,.xlsm" multiple hidden></label>':'<p class="note">Solo administrador y analista pueden importar.</p>')+
+(isP()&&API?'<p class="note" style="margin:0 0 12px">Carga aquí <b>tu propia base de resultados</b> (hojas HISTORICO y AUSENTISMO). Cada carga reemplaza la anterior y queda guardada para el administrador y el analista.</p>':'')+(API&&S.resSrv&&S.resSrv.length&&!isP()?'<p class="note" style="margin:0 0 12px">Bases de resultados guardadas: '+S.resSrv.map(z=>'<b>'+esc(PN[z.poligrafista]||z.poligrafista)+'</b> '+z.n+' pruebas ('+fmt(String(z.desde).slice(0,10))+' – '+fmt(String(z.hasta).slice(0,10))+')').join(' · ')+'</p>':'')+(ad?'<label class="btn" style="display:inline-flex;align-items:center;justify-content:center;padding:0 18px;cursor:pointer">Elegir archivos Excel<input id="impf" type="file" accept=".xlsx,.xlsm" multiple hidden></label>':'<p class="note">Solo administrador y analista pueden importar.</p>')+
 (T.length?' <button type="button" class="btn" data-act="impclr" style="background:var(--card);color:var(--ink)">Borrar datos importados</button>':'')+'</div>'+
 (S.imp.log.length?'<div class="card"><h3>Resultado de la importación</h3>'+S.imp.log.map(l=>'<div class="fm">'+esc(l)+'</div>').join('')+'</div>':'')+
 (T.length?'<div class="card sc"><h3>Datos cargados en esta sesión</h3>'+tbl(['Poligrafista','Realizadas','Ausentes','Programadas','Primera fecha','Última fecha'],PS.map(q=>{const t=T.filter(x=>x.p===q).map(x=>x.f).sort();return [PN[q],c(x=>x.p===q&&x.e==='Realizada'),c(x=>x.p===q&&x.e==='Ausente'),c(x=>x.p===q&&x.e==='Programada'),t[0]?fmt(t[0]):'—',t.length?fmt(t[t.length-1]):'—'];}))+'<p class="mut">Los vencimientos se recalculan por documento desde la última prueba realizada (Control y otras: 12 meses; Preempleo: 6 meses; Inconclusa igual que Aprobó, como en la base).</p></div>':'');}
