@@ -1134,11 +1134,38 @@ const H2=['DIA','MES','AÑO','NOMBRE COMPLETO','DOCUMENTO','CARGO','CIUDAD','MOT
 const A1=L.filter(x=>x.e==='Realizada'||x.e==='Suspendida').map(x=>base(x).concat([x.r||(x.e==='Suspendida'?'Suspendida':''),x.re||'N/A',x.adm||'SIN ADMINSIONES',PN[x.p],dt0(x.f),x.pdf&&x.pdf.name?x.pdf.name:(typeof x.pdf==='string'?x.pdf:''),'',x.obs||'sin novedad',hh(x.h),hh(x.hf)]));
 const A2=L.filter(x=>x.e==='Ausente').map(x=>base(x).concat(['Ausente','N/A','N/A',PN[x.p],dt0(x.f)]));
 saveWB('BASE_RESULTADOS_'+(q==='all'?'TODOS':UP(PN[q]).split(' ').join('_')),[{n:'HISTORICO',a:[H1].concat(A1),w:[6,6,7,32,14,24,14,13,12,16,28,16,12,16,16,18,12,10]},{n:'AUSENTISMO',a:[H2].concat(A2),w:[6,6,7,32,14,24,14,13,12,20,20,16,12]}]);}
-function pxls(){const mon=mondayOf(S.cd||TODAY),days=[0,1,2,3,4,5].map(i=>addD(mon,i)),sh=[],flat=[];
-PS.forEach(q=>{const a=[[null,'PROGRAMACIÓN SEMANAL'],[],[],[]];days.forEach(d=>{const ts=S.tests.filter(x=>x.p===q&&x.f===d&&x.e!=='Reprogramar').sort((a,b)=>hh(a.h).localeCompare(hh(b.h)));if(!ts.length)return;a.push([null,'FECHA',dt0(d)]);a.push([null,'HORA','CEDULA','NOMBRE COMPLETO','CARGO','LIDER','TIPO DE PRUEBA','CIUDAD']);ts.forEach(x=>{a.push([null,hh(x.h),x.doc,UP(x.n),UP(x.cargo),UP(x.l),UP(x.t),UP(x.ciudad)]);const y=+d.slice(0,4);flat.push([y,+d.slice(5,7),+d.slice(8),dt0(d),hh(x.h),x.doc,UP(x.n),UP(x.cargo),null,null,'POLIGRAFIA '+UP(x.t),'POLIGRAFIA',UP(x.ciudad),UP(PN[q]),null,null,null]);});a.push([]);a.push([]);});
-sh.push({n:UP(PN[q]),a,w:[3,12,14,34,26,22,16,16]});});
-sh.push({n:'PROGRAMACION',a:flat,w:[6,5,5,12,10,14,32,24,4,4,26,14,16,18]});
-saveWB('PROGRAMACION_SEMANAL_'+days[0]+'_a_'+days[5],sh);}
+/* Programación semanal con el formato exacto del archivo PROGRAMACIÓN DE POLIGRAFÍAS (ExcelJS para estilos) */
+function libX(){return window.ExcelJS?Promise.resolve(true):new Promise(r=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';s.onload=()=>r(!!window.ExcelJS);s.onerror=()=>r(false);document.head.appendChild(s);});}
+const SLOT0=['8:00','10:00','13:00','15:00'];
+const tfrac=t=>{const q=String(t||'').split(':');return ((+q[0]||0)*60+(+q[1]||0))/1440;};
+const xdate=f=>new Date(Date.UTC(+f.slice(0,4),+f.slice(5,7)-1,+f.slice(8,10)));
+async function pxls(){const mon=mondayOf(S.cd||TODAY),days=[0,1,2,3,4,5].map(i=>addD(mon,i)),name='PROGRAMACION_SEMANAL_'+days[0]+'_a_'+days[5];
+try{const dl=await dlh();if(!dl){S.msg='La descarga no está disponible en esta vista.';render();return;}
+if(!(await libX())){S.msg='No se pudo preparar el Excel (falta la librería). Revisa tu conexión.';render();return;}
+const wb=new ExcelJS.Workbook(),F={name:'Arial',size:11},DOT={style:'dotted',color:{argb:'FF000000'}},BOX={top:DOT,left:DOT,bottom:DOT,right:DOT},fill=c=>({type:'pattern',pattern:'solid',fgColor:{argb:c}});
+const flat=[],ps=isP()?[S.role]:PS;
+ps.forEach(q=>{const ws=wb.addWorksheet(UP(PN[q]).slice(0,31),{properties:{tabColor:{argb:'FF'+String(PC[q]||'#00FF00').replace('#','').toUpperCase()}},views:[{state:'frozen',ySplit:3}]});
+[3,15.8,30,43,36,41,22,17].forEach((w,k)=>ws.getColumn(k+1).width=w);
+ws.mergeCells('B1:H3');const t=ws.getCell('B1');t.value='PROGRAMACIÓN SEMANAL';t.font={name:'Arial',size:22,bold:true};t.fill=fill('FFD9EAD3');t.alignment={horizontal:'center',vertical:'middle'};
+let r=5;days.forEach(d=>{const ts=S.tests.filter(x=>x.p===q&&x.f===d&&x.e!=='Reprogramar'&&x.e!=='Ausente'),ac=[];['val','arq','cgm'].forEach(g=>(S.rec[g]||[]).filter(z=>z.p===q&&(z.f||'')===d).forEach(z=>ac.push({h:String(z.ini||'8:00').slice(0,5).replace(/^0/,''),txt:UP(LA[g]+(z.o?' · '+z.o:''))})));
+const au=ausente(q,d,null),hs=[...new Set(SLOT0.concat(ts.map(x=>x.h),ac.map(x=>x.h)).filter(Boolean).map(x=>String(x).replace(/^0/,'')))].sort((a,b)=>tfrac(a)-tfrac(b));
+const fr=ws.getRow(r);fr.getCell(2).value='FECHA';fr.getCell(2).font={...F,bold:true,color:{argb:'FFFFFFFF'}};fr.getCell(2).fill=fill('FF20124D');fr.getCell(2).border=BOX;
+for(let c=3;c<=8;c++){const x=fr.getCell(c);x.fill=fill('FFF9CB9C');x.font={...F,bold:true};x.alignment={horizontal:'center'};x.numFmt='[$-es-CO]dddd", "d" de "mmmm" de "yyyy';x.border={top:DOT,bottom:DOT};}
+ws.mergeCells(r,3,r,8);fr.getCell(3).value=xdate(d);fr.getCell(3).border=BOX;
+const hr=ws.getRow(r+1);['HORA','CEDULA','NOMBRE COMPLETO','CARGO','LIDER','TIPO DE PRUEBA','CIUDAD'].forEach((v,k)=>{const x=hr.getCell(k+2);x.value=v;x.font={...F,bold:true,color:{argb:k?'FF000000':'FFFFFFFF'}};x.fill=fill(k?'FFFF9900':'FF20124D');x.border=BOX;if(k)x.alignment={horizontal:'center'};});
+let rr=r+2;hs.forEach((hx,ix)=>{const row=ws.getRow(rr);for(let c=2;c<=8;c++){const x=row.getCell(c);x.font=F;x.border=BOX;if(c>2)x.alignment={horizontal:'center',vertical:'middle'};}
+row.getCell(2).value=tfrac(hx);row.getCell(2).numFmt='h":"mm" "AM/PM';
+const x=ts.find(z=>String(z.h||'').replace(/^0/,'')===hx),a=ac.find(z=>z.h===hx);
+if(x){const doc=/^\d+$/.test(String(x.doc))?+x.doc:x.doc;[doc,UP(x.n),UP(x.cargo),UP(x.l),UP(x.t),UP(x.ciudad)].forEach((v,k)=>row.getCell(k+3).value=v);
+flat.push([+d.slice(0,4),+d.slice(5,7),+d.slice(8),xdate(d),tfrac(hx),doc,UP(x.n),UP(x.cargo),null,null,'POLIGRAFIA '+UP(x.t),'POLIGRAFIA',UP(x.ciudad),UP(PN[q])]);}
+else if(a){ws.mergeCells(rr,3,rr,6);row.getCell(3).value=a.txt;}
+else if(au&&ix===0&&!ts.length){ws.mergeCells(rr,3,rr+hs.length-1,6);row.getCell(3).value=UP('Permiso: '+au.tipo+(au.hora_ini?' '+au.hora_ini+'–'+au.hora_fin:''));}
+rr++;});
+r=rr+2+(D(d).getDay()===6?1:0);});});
+if(!isP()){const ws=wb.addWorksheet('PROGRAMACION');[7.8,6,7.3,25.1,13.1,13,33.9,14.7,26.8,34.8,20.9,14.7,17.9,17.2].forEach((w,k)=>ws.getColumn(k+1).width=w);
+flat.sort((a,b)=>a[3]-b[3]||a[4]-b[4]).forEach(v=>{const row=ws.addRow(v);row.getCell(4).numFmt='yyyy-mm-dd';row.getCell(5).numFmt='h":"mm" "AM/PM';row.font={name:'Arial',size:10};});}
+const data=await wb.xlsx.writeBuffer();await dl.save({filename:name+'.xlsx',data:new Uint8Array(data)});S.msg='Archivo listo: '+name+'.xlsx';}
+catch(err){S.msg=err&&err.code==='declined'?'Descarga cancelada.':'No se pudo generar el archivo.';console.error(err);}render();}
 const HBASE=["CEDULA", "NOMBRE", "CARGO", "FECHA DE INGRESO", "CONTRATO", "TIPO DE EMPLEADO", "REGIONAL", "ZONA", "CIUDAD", "C.C", "C.C HELISA", "UNIDAD DE NEGOCIO", "CLIENTE", "EMPRESA", "OFICINA", "SUPERVISOR / GERENTE", "STATUS PLANTA", "FUERO", "Fecha de poligrafia Preempleo", "DT PREEMPLEO", "AÑO1", "Fecha poligrafia pre-control", "PRECONTROL", "AÑO2", "Fecha Poligrafia control 2024", "CONTROL 2024", "AÑO3", "Fecha Poligrafia control 2025", "CONTROL 2025", "AÑO", "Fecha Poligrafia control 2026", "CONTROL 2026", "AÑO4", "CONCEPTO DE PROGRAMACION", "FECHA", "REACCIÓN DE ENGAÑO", "ADMISIONES", "PERIODO DE PRUEBA", "POLIGRAFISTA ASIGNADO", "CIUDAD#2", "CIUDAD OFICINA", "DEPARTAMENTO", "FILTRO PROGRAMACION", "PROGRAMAR ANTES DE", "ESTADO", "Alertamiento Vinculación", "CONCEPTO2"];
 function vbase(o){const x=o.x,T=S.tests.filter(t=>ck(t.doc)===ck(x.doc)&&t.e==='Realizada'),pre=T.filter(t=>t.t==='Preempleo').sort((a,b)=>b.f.localeCompare(a.f))[0],cy=y=>T.filter(t=>t.t!=='Preempleo'&&t.f.slice(0,4)===String(y)).sort((a,b)=>b.f.localeCompare(a.f))[0],c24=cy(2024),c25=cy(2025),c26=cy(2026),z=t=>t?dt0(t.f):'',rr=t=>t?t.r:'',yy=t=>t?+t.f.slice(0,4):'';
 const m={'CEDULA':x.doc,'NOMBRE':UP(x.n),'CARGO':UP(x.cargo),'ZONA':ZONA[x.p],'CIUDAD':UP(x.ciudad),'SUPERVISOR / GERENTE':UP(x.l),'Fecha de poligrafia Preempleo':z(pre),'DT PREEMPLEO':rr(pre),'AÑO1':yy(pre),'Fecha Poligrafia control 2024':z(c24),'CONTROL 2024':rr(c24),'AÑO3':yy(c24),'Fecha Poligrafia control 2025':z(c25),'CONTROL 2025':rr(c25),'AÑO':yy(c25),'Fecha Poligrafia control 2026':z(c26),'CONTROL 2026':rr(c26),'AÑO4':yy(c26),'CONCEPTO DE PROGRAMACION':o.sf?'SIN HISTORIAL':o.d<0?'VENCIDA':o.d<=30?'POR VENCER':'VIGENTE','FECHA':o.nx?dt0(o.nx):'','REACCIÓN DE ENGAÑO':x.re||'','ADMISIONES':x.adm||'','POLIGRAFISTA ASIGNADO':UP(PN[x.p]),'CIUDAD OFICINA':UP(x.ciudad),'PROGRAMAR ANTES DE':o.nx?dt0(o.nx):'','ESTADO':o.sf?'SIN HISTORIAL':o.d<0?'VENCIDA':o.d<=30?'POR VENCER':'VIGENTE'};
