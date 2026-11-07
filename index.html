@@ -332,9 +332,11 @@ main>*{flex-shrink:0}
 <script>
 let TODAY='2026-10-27',WK0='2026-10-26',WK1='2026-10-31';
 const ROLES=[['admin','Administrador'],['analista','Analista'],['P1','Poligrafista 1'],['P2','Poligrafista 2'],['P3','Poligrafista 3'],['P4','Poligrafista 4'],['th','Talento Humano'],['lider','Líder A']];
-const CITY={'Medellín':'P1','Envigado':'P1','Rionegro':'P1','Bogotá':'P2','Tunja':'P2','Ibagué':'P2','Cali':'P3','Pereira':'P3','Popayán':'P3'};
-const ZONA={P1:'Antioquia',P2:'Centro',P3:'Occidente',P4:'Por definir'},PN={P1:'Durley Wilches',P2:'Carlos Castaño',P3:'Luis Vanegas',P4:'José Barbosa'},PS=['P1','P2','P3','P4'];
-const SLOTS=(()=>{const r=[];for(let m=420;m<=1050;m+=30)r.push(Math.floor(m/60)+':'+String(m%60).padStart(2,'0'));return r})(),DN=['Lun','Mar','Mié','Jue','Vie','Sáb'];
+let CITY={'Bogotá':'P1','Soacha':'P1','Zipaquirá':'P1','Chía':'P1','Facatativá':'P1','Fusagasugá':'P1','Girardot':'P1','Mosquera':'P1','Madrid':'P1','Funza':'P1','Villavicencio':'P1','Acacías':'P1','Granada':'P1','Yopal':'P1','Aguazul':'P1','Ibagué':'P1','Espinal':'P1','Melgar':'P1','Honda':'P1','Arauca':'P1','Saravena':'P1','Tame':'P1','San José del Guaviare':'P1','Medellín':'P2','Envigado':'P2','Rionegro':'P2','Bello':'P2','Itagüí':'P2','Sabaneta':'P2','Apartadó':'P2','Turbo':'P2','Caucasia':'P2','Puerto Berrío':'P2','Barranquilla':'P2','Soledad':'P2','Malambo':'P2','Puerto Colombia':'P2','Sabanagrande':'P2','Cartagena':'P2','Magangué':'P2','Turbaco':'P2','Montería':'P2','Montelíbano':'P2','Ayapel':'P2','Sahagún':'P2','Lorica':'P2','Sincelejo':'P2','Corozal':'P2','Cali':'P3','Palmira':'P3','Tuluá':'P3','Buga':'P3','Cartago':'P3','Jamundí':'P3','Yumbo':'P3','Buenaventura':'P3','Armenia':'P3','Calarcá':'P3','Pereira':'P3','Dosquebradas':'P3','Santa Rosa de Cabal':'P3','Manizales':'P3','La Dorada':'P3','Neiva':'P3','Pitalito':'P3','Garzón':'P3','Pasto':'P3','Ipiales':'P3','Tumaco':'P3','Popayán':'P3','Tunja':'P4','Duitama':'P4','Sogamoso':'P4','Chiquinquirá':'P4','Bucaramanga':'P4','Floridablanca':'P4','Girón':'P4','Piedecuesta':'P4','Barrancabermeja':'P4','San Gil':'P4','Cúcuta':'P4','Ocaña':'P4','Pamplona':'P4','Valledupar':'P4','Aguachica':'P4','Santa Marta':'P4','Ciénaga':'P4','Riohacha':'P4','Maicao':'P4','San Andrés':'P4'};
+const ZONA={P1:'Cundinamarca, Meta, Casanare, Tolima, Arauca, Guaviare',P2:'Antioquia, Atlántico, Bolívar, Córdoba, Sucre',P3:'Valle del Cauca, Quindío, Risaralda, Caldas, Huila, Nariño',P4:'Boyacá, Santander, Norte de Santander, Cesar, Magdalena, La Guajira, San Andrés'},PN={P1:'Durley Wilches',P2:'Carlos Castaño',P3:'Luis Vanegas',P4:'José Barbosa'},PS=['P1','P2','P3','P4'];
+const SLOTS=(()=>{const r=[];for(let m=420;m<=1020;m+=30)r.push(Math.floor(m/60)+':'+String(m%60).padStart(2,'0'));return r})(),DN=['Lun','Mar','Mié','Jue','Vie','Sáb'];
+const ZDEP={'CUNDINAMARCA':'P1','META':'P1','CASANARE':'P1','TOLIMA':'P1','ARAUCA':'P1','GUAVIARE':'P1','ANTIOQUIA':'P2','ATLANTICO':'P2','BOLIVAR':'P2','CORDOBA':'P2','SUCRE':'P2','VALLE DEL CAUCA':'P3','QUINDIO':'P3','RISARALDA':'P3','CALDAS':'P3','HUILA':'P3','NARINO':'P3','BOYACA':'P4','SANTANDER':'P4','NORTE DE SANTANDER':'P4','CESAR':'P4','MAGDALENA':'P4','LA GUAJIRA':'P4','SAN ANDRES':'P4','BOGOTA D.C.':'P1','BOGOTA':'P1','VALLE':'P3','NORTE SANTANDER':'P4','GUAJIRA':'P4','SAN ANDRES Y PROVIDENCIA':'P4','ARCHIPIELAGO DE SAN ANDRES':'P4'};
+CITY=new Proxy(CITY,{get(t,k){if(typeof k!=='string'||k in t)return t[k];const n=hn(k);if(!n)return undefined;const f=Object.keys(t).find(x=>hn(x)===n);return f?t[f]:undefined;}});
 const CIT=p=>Object.keys(CITY).filter(c=>CITY[c]===p);
 const MENU={admin:['dash','cal','diaria','prog','res','resumen','venc','val','arq','cgm','form','usr'],analista:['dash','cal','diaria','res','resumen','venc','val','arq','cgm','form'],poli:['dash','cal','prog','venc','resumen','res','val','arq','cgm','form','imp'],th:['prog','cal','res'],lider:['cal']};
 const LBL={dash:'Dashboard de cumplimiento',cal:'Calendario',prog:'Programar prueba',res:'Resultados',venc:'Vencimientos',val:'Validaciones de cuentas',arq:'Arqueos',cgm:'Apoyo CGM · cámaras',form:'Formatos de entrevista',usr:'Usuarios y roles',diaria:'Programación diaria',resumen:'Resumen de actividades'};
@@ -404,7 +406,7 @@ Object.keys(S.ult||{}).forEach(k=>{const u=S.ult[k];if(S.planta[k]&&(!last[k]||u
 const out={};
 Object.keys(S.planta).forEach(k=>{const P=S.planta[k];if(RET.test(P['STATUS PLANTA']||''))return;
 let bt=null;BTEST.forEach(([fc,t,rc])=>{const f=nd(P[fc]);if(f&&(!bt||f>bt.f))bt={f,t,r:tcase(P[rc]||'')};});
-const ciudad=tcase(P['CIUDAD#2']||P['CIUDAD']||P['CIUDAD OFICINA']||''),p=pOf(P['POLIGRAFISTA ASIGNADO']||'')||CITY[ciudad]||'';
+const ciudad=tcase(P['CIUDAD#2']||P['CIUDAD']||P['CIUDAD OFICINA']||''),p=pOf(P['POLIGRAFISTA ASIGNADO']||'')||CITY[ciudad]||ZDEP[hn(P['DEPARTAMENTO']||'')]||'';
 const at=last[k],useApp=at&&(!bt||at.f>=bt.f);
 const x=Object.assign({},useApp?at:{f:bt?bt.f:'',t:bt?bt.t:'Control',r:bt?bt.r:'',re:P['REACCIÓN DE ENGAÑO']||'',adm:P['ADMISIONES']||''},{doc:P['CEDULA']||k,n:P['NOMBRE']||(at&&at.n)||'',cargo:tcase(P['CARGO']||(at&&at.cargo)||''),ciudad:ciudad||(at&&at.ciudad)||'',of:P['OFICINA']||'',l:P['SUPERVISOR / GERENTE']||(at&&at.l)||'',p:p||(at&&at.p)||'',base:1});
 const pa=nd(P['PROGRAMAR ANTES DE']);let nx=useApp||!pa?(x.f?addM(x.f,x.t==='Preempleo'?6:12):''):pa;
@@ -1136,7 +1138,7 @@ const A2=L.filter(x=>x.e==='Ausente').map(x=>base(x).concat(['Ausente','N/A','N/
 saveWB('BASE_RESULTADOS_'+(q==='all'?'TODOS':UP(PN[q]).split(' ').join('_')),[{n:'HISTORICO',a:[H1].concat(A1),w:[6,6,7,32,14,24,14,13,12,16,28,16,12,16,16,18,12,10]},{n:'AUSENTISMO',a:[H2].concat(A2),w:[6,6,7,32,14,24,14,13,12,20,20,16,12]}]);}
 /* Programación semanal con el formato exacto del archivo PROGRAMACIÓN DE POLIGRAFÍAS (ExcelJS para estilos) */
 function libX(){return window.ExcelJS?Promise.resolve(true):new Promise(r=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';s.onload=()=>r(!!window.ExcelJS);s.onerror=()=>r(false);document.head.appendChild(s);});}
-const SLOT0=['8:00','10:00','13:00','15:00'];
+const SLOT0=SLOTS;
 const tfrac=t=>{const q=String(t||'').split(':');return ((+q[0]||0)*60+(+q[1]||0))/1440;};
 const xdate=f=>new Date(Date.UTC(+f.slice(0,4),+f.slice(5,7)-1,+f.slice(8,10)));
 async function pxls(){const mon=mondayOf(S.cd||TODAY),days=[0,1,2,3,4,5].map(i=>addD(mon,i)),name='PROGRAMACION_SEMANAL_'+days[0]+'_a_'+days[5];
