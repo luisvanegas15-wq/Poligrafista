@@ -69,6 +69,13 @@ CREATE TABLE IF NOT EXISTS vencimientos (
 );
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS hash_legado TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS debe_cambiar BOOLEAN DEFAULT TRUE;
+CREATE TABLE IF NOT EXISTS en_vivo (
+  id TEXT PRIMARY KEY,
+  tipo TEXT NOT NULL,
+  poligrafista TEXT,
+  datos JSONB DEFAULT '{}'::jsonb,
+  actualizado TIMESTAMPTZ DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS sesiones (
   token TEXT PRIMARY KEY,
   usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
@@ -103,6 +110,7 @@ async function initDB() {
       );
     }
     await pool.query('DELETE FROM sesiones WHERE expira < now()');
+    await pool.query("DELETE FROM en_vivo WHERE actualizado < now() - interval '24 hours'");
     console.log('Base de datos lista.');
   }
   catch (e) { console.error('Error BD:', e.message); }
@@ -212,6 +220,50 @@ app.post('/api/clave', async (req, res) => {
     await pool.query('DELETE FROM sesiones WHERE usuario_id = $1 AND token <> $2', [u.id, leerCookie(req, COOKIE)]);
     res.json({ ok: true });
   } catch (e) { console.error('clave:', e.message); res.status(500).json({ ok: false, error: 'Error del servidor.' }); }
+});
+
+// ===== Seguimiento en vivo compartido =====
+const VE_TODO = ['admin', 'analista'];
+const esPoli = rol => /^P\d+$/.test(rol || '');
+async function conSesion(req, res) {
+  if (!pool) { sinBD(res); return null; }
+  const u = await usuarioDeSesion(req).catch(() => null);
+  if (!u) { res.status(401).json({ ok: false, error: 'Sesión expirada.' }); return null; }
+  return u;
+}
+function puedeEscribir(u, poli) { return VE_TODO.includes(u.rol) || (esPoli(u.rol) && u.rol === poli); }
+
+app.get('/api/vivo', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  let r;
+  if (VE_TODO.includes(u.rol)) r = await pool.query('SELECT id, tipo, poligrafista, datos FROM en_vivo ORDER BY id');
+  else if (esPoli(u.rol)) r = await pool.query('SELECT id, tipo, poligrafista, datos FROM en_vivo WHERE poligrafista = $1 ORDER BY id', [u.rol]);
+  else return res.json({ ok: true, items: [] });
+  res.json({ ok: true, items: r.rows });
+});
+
+app.put('/api/vivo/:id', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const id = String(req.params.id).slice(0, 60), tipo = String(req.body?.tipo || ''), datos = req.body?.datos || {};
+  const poli = String(datos.p || '');
+  if (!['poli', 'val', 'arq', 'cgm'].includes(tipo) || !/^(poli|act)-\d+$/.test(id)) return res.status(400).json({ ok: false });
+  if (!puedeEscribir(u, poli)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
+  const prev = await pool.query('SELECT poligrafista FROM en_vivo WHERE id = $1', [id]);
+  if (prev.rows[0] && !puedeEscribir(u, prev.rows[0].poligrafista)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
+  await pool.query(
+    `INSERT INTO en_vivo (id, tipo, poligrafista, datos, actualizado) VALUES ($1,$2,$3,$4,now())
+     ON CONFLICT (id) DO UPDATE SET tipo = EXCLUDED.tipo, poligrafista = EXCLUDED.poligrafista, datos = EXCLUDED.datos, actualizado = now()`,
+    [id, tipo, poli, datos]
+  );
+  res.json({ ok: true });
+});
+
+app.delete('/api/vivo/:id', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const prev = await pool.query('SELECT poligrafista FROM en_vivo WHERE id = $1', [req.params.id]);
+  if (prev.rows[0] && !puedeEscribir(u, prev.rows[0].poligrafista)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
+  await pool.query('DELETE FROM en_vivo WHERE id = $1', [req.params.id]);
+  res.json({ ok: true });
 });
 
 app.use(express.static(__dirname, { index: 'index.html', extensions: ['html'] }));

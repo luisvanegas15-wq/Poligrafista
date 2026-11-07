@@ -436,7 +436,7 @@ S.live=[];S.lv={};
 const PH={val:['Conexión a cámaras','Revisión de cuentas','Cierre y hallazgos'],arq:['Conteo de efectivo','Cuadre con el sistema','Acta y novedades'],cgm:['Acceso a cámaras','Revisión de oficinas','Reporte a CGM y central']},LA={val:'Validación de cuentas',arq:'Arqueo',cgm:'Apoyo CGM'};
 const hhmm=()=>new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',hour12:false}).replace(/^24/,'00');
 const tlHtml=o=>{const T=o&&o.tl&&o.tl.length?o.tl:null;if(!T)return o&&o.ini&&o.fin?'<span class="tls"><span class="tlp s"><i>Inicio</i> '+o.ini+'</span><b>→</b><span class="tlp f"><i>Fin</i> '+o.fin+'</span></span>':'—';return '<span class="tls">'+T.map((st,i)=>'<span class="tlp'+(i===0?' s':st.k==='Fin'?' f':'')+'"><i>'+esc(st.k)+'</i> '+st.at+'</span>').join('<b>→</b>')+'</span>';};
-function vLive(){const own=x=>S.role==='admin'||S.role==='analista'||(isP()&&x.p===S.role),T=S.tests.filter(x=>x.e==='En curso'&&own(x)).map(x=>({c:'#EF4444',tag:'Polígrafía',n:x.n,sub:x.t+' · '+x.ciudad+' · '+PN[x.p]+' · inició '+(x.h0||x.h),F:FASES,fase:x.fase||0,t0:x.t0})),A=S.live.filter(own).map(x=>({c:MC[x.g],tag:LA[x.g],n:x.o,sub:PN[x.p]+' · inició '+x.tl[0].at,F:PH[x.g],fase:x.fase,t0:x.t0,tl:x.tl})),L=T.concat(A);
+function vLive(){const own=x=>S.role==='admin'||S.role==='analista'||(isP()&&x.p===S.role),T=S.tests.filter(x=>x.e==='En curso'&&own(x)).concat((S.vivoP||[]).filter(r=>own(r)&&!S.tests.some(t=>t.id===r.id&&t.e==='En curso'))).map(x=>({c:'#EF4444',tag:'Polígrafía',n:x.n,sub:x.t+' · '+x.ciudad+' · '+PN[x.p]+' · inició '+(x.h0||x.h),F:FASES,fase:x.fase||0,t0:x.t0})),A=S.live.filter(own).map(x=>({c:MC[x.g],tag:LA[x.g],n:x.o,sub:PN[x.p]+' · inició '+x.tl[0].at,F:PH[x.g],fase:x.fase,t0:x.t0,tl:x.tl})),L=T.concat(A);
 if(!L.length)return S.role==='admin'||S.role==='analista'?'<div class="card live idle"><div class="lh2"><span class="lv off"></span><b>Actividades en ejecución</b><span class="mut">Ninguna en este momento. Aquí verás en vivo las polígrafías, validaciones, arqueos y apoyos a CGM apenas un poligrafista los inicie.</span></div></div>':'';
 return '<div class="card live"><div class="lh2"><span class="lv"></span><b>En ejecución ahora · '+L.length+'</b><span class="mut">Avance en vivo: inicio, proceso y finalización</span></div>'+L.map(x=>'<div class="lit"><div class="lin"><span class="atg" style="background:'+x.c+'22;color:'+x.c+'">'+x.tag+'</span><b>'+esc(x.n)+'</b><div class="mut">'+x.sub+'</div></div><div class="stp">'+x.F.map((f,i)=>'<span class="'+(i<x.fase?'dn':i===x.fase?'ac':'')+'"><i>'+(i<x.fase?'✓':i+1)+'</i>'+f+'</span>').join('')+'</div><div class="lt"><b class="el" data-t0="'+x.t0+'">'+elapsed(x.t0)+'</b><small>transcurrido</small></div>'+(x.tl?'<div class="ltl">'+tlHtml({tl:x.tl})+'</div>':'')+'<div class="pbar"><i style="width:'+Math.round(100*(x.fase+1)/x.F.length)+'%;background:'+x.c+'"></i></div></div>').join('')+'</div>';}
 function resAct(x){if(!canClose()||!(S.role==='admin'||x.p===S.role))return '';
@@ -562,11 +562,23 @@ Object.keys(MENU).forEach(k=>MENU[k].push('clave'));LBL.clave='Cambiar contrase�
 S.pf={a:'',n:'',r:''};
 /* ===== Login real (servidor + PostgreSQL). Si no hay servidor, sigue en modo demo ===== */
 let API=false;
-async function api(r,b){const o={method:b?'POST':'GET',credentials:'same-origin',headers:{}};if(b){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b);}const x=await fetch(r,o);let j={};try{j=await x.json();}catch(e){}j.status=x.status;return j;}
+async function api(r,b,m,pb){if(pb)b=pb;const o={method:m||(b?'POST':'GET'),credentials:'same-origin',headers:{}};if(b){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b);}const x=await fetch(r,o);let j={};try{j=await x.json();}catch(e){}j.status=x.status;return j;}
 function apiEntrar(us){const u=USERS.find(x=>x[0]===us.usuario)||[us.usuario,us.nombre,us.rol,''];S.user=u;S.role=u[2];S.view='dash';S.msg='';S.closing=0;S.force=!!us.debe_cambiar;S.pf={a:'',n:'',r:''};}
-async function apiIniciar(){try{const j=await api('/api/salud');if(j&&j.db==='conectada'){API=true;const y=await api('/api/yo');if(y.ok&&y.user){apiEntrar(y.user);render();}}}catch(e){}}
+/* Seguimiento en vivo compartido: se guarda en el servidor y se consulta cada 8 s */
+S.vivoP=[];let VIVO_SIG='',VIVO_PEND=false;
+function vivoPut(id,tipo,datos){if(API&&S.user)api('/api/vivo/'+id,null,'PUT',{tipo,datos}).catch(()=>{});}
+function vivoP(x){vivoPut('poli-'+x.id,'poli',{id:x.id,n:x.n,t:x.t,ciudad:x.ciudad,p:x.p,h0:x.h0,fase:x.fase||0,t0:x.t0,tl:x.tl||[]});}
+function vivoA(x){vivoPut('act-'+x.id,x.g,{id:x.id,g:x.g,p:x.p,o:x.o,fase:x.fase,t0:x.t0,tl:x.tl});}
+function vivoDel(id){if(API&&S.user)api('/api/vivo/'+id,null,'DELETE').catch(()=>{});}
+async function vivoSync(){if(!API||!S.user)return;try{const j=await api('/api/vivo');if(j.status===401){S.user=null;S.force=false;S.lf={u:ru0(),p:'',e:'Tu sesión expiró. Ingresa de nuevo.',rem:true,show:false};render();return;}if(!j.ok)return;
+const sig=JSON.stringify(j.items);if(sig===VIVO_SIG&&!VIVO_PEND)return;VIVO_SIG=sig;
+const P=[],A=[];j.items.forEach(r=>{const d=r.datos||{};if(r.tipo==='poli')P.push(d);else A.push(d);});
+S.vivoP=P;P.forEach(d=>{const t=S.tests.find(z=>z.id===d.id);if(t&&(t.e==='Programada'||t.e==='En curso')){t.e='En curso';t.fase=d.fase;t.t0=d.t0;t.h0=d.h0;t.tl=d.tl;}});
+S.live=A;const ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)){VIVO_PEND=true;return;}VIVO_PEND=false;render();}catch(e){}}
+setInterval(vivoSync,8000);
+async function apiIniciar(){try{const j=await api('/api/salud');if(j&&j.db==='conectada'){API=true;const y=await api('/api/yo');if(y.ok&&y.user){apiEntrar(y.user);render();vivoSync();}}}catch(e){}}
 async function doLogin(){if(API){try{const j=await api('/api/login',{u:S.lf.u.trim().toLowerCase(),p:S.lf.p});
-if(j.ok){apiEntrar(j.user);try{if(S.lf.rem)localStorage.setItem('poli_user',j.user.usuario);else localStorage.removeItem('poli_user');}catch(e){}S.lf={u:'',p:'',e:'',rem:S.lf.rem,show:false};}
+if(j.ok){apiEntrar(j.user);setTimeout(vivoSync,300);try{if(S.lf.rem)localStorage.setItem('poli_user',j.user.usuario);else localStorage.removeItem('poli_user');}catch(e){}S.lf={u:'',p:'',e:'',rem:S.lf.rem,show:false};}
 else S.lf.e=j.error||'Correo o contraseña incorrectos.';}catch(e){S.lf.e='No hay conexión con el servidor. Intenta de nuevo.';}render();return;}
 try{if(typeof crypto==='undefined'||!crypto.subtle){S.lf.e='Abre la página con https para poder iniciar sesión.';render();return;}
 const u=USERS.find(x=>x[0]===S.lf.u.trim().toLowerCase());let ok=false;if(u)ok=(await sha(u[0]+':'+S.lf.p))===(PW[u[0]]||u[3]);
@@ -626,8 +638,8 @@ else if(a==='gd'){S.cd=d.d;S.cv='d';}
 else if(a==='cp')S.cp=d.p;
 else if(a==='cell'){S.form.f=d.d;S.form.h=d.h;S.form.p=d.p;S.form.ciudad=CIT(d.p)[0];S.view='prog';S.msg='';}
 else if(a==='close'){S.closing=+d.id;S.cl={r:'Aprobó',obs:'',admt:'',pdf:'',pdff:null};S.msg='';}
-else if(a==='start'){const x=S.tests.find(t=>t.id===+d.id);if(x){x.e='En curso';x.t0=Date.now();x.fase=0;x.h0=hhmm();x.tl=[{k:'Inicio',at:x.h0}];sendMail({to:['administrador@suitepoligrafia.example'],subj:'Prueba iniciada · '+x.n,body:PN[x.p]+' inició la prueba de '+x.n+' ('+x.t+', '+x.ciudad+') a las '+x.h0+'. Puedes seguir el avance en el dashboard.',att:[]});S.msg='Prueba iniciada: el administrador ya la ve en ejecución en su dashboard.';}}
-else if(a==='nextf'){const x=S.tests.find(t=>t.id===+d.id);if(x&&x.fase<FASES.length-1){x.fase++;(x.tl=x.tl||[]).push({k:FASES[x.fase],at:hhmm()});S.msg='Etapa actual: '+FASES[x.fase]+'.';}}
+else if(a==='start'){const x=S.tests.find(t=>t.id===+d.id);if(x){x.e='En curso';x.t0=Date.now();x.fase=0;x.h0=hhmm();x.tl=[{k:'Inicio',at:x.h0}];vivoP(x);sendMail({to:['administrador@suitepoligrafia.example'],subj:'Prueba iniciada · '+x.n,body:PN[x.p]+' inició la prueba de '+x.n+' ('+x.t+', '+x.ciudad+') a las '+x.h0+'. Puedes seguir el avance en el dashboard.',att:[]});S.msg='Prueba iniciada: el administrador ya la ve en ejecución en su dashboard.';}}
+else if(a==='nextf'){const x=S.tests.find(t=>t.id===+d.id);if(x&&x.fase<FASES.length-1){x.fase++;(x.tl=x.tl||[]).push({k:FASES[x.fase],at:hhmm()});vivoP(x);S.msg='Etapa actual: '+FASES[x.fase]+'.';}}
 else if(a==='pg'){S.pg[d.k]=+d.to;}
 else if(a==='cancelc')S.closing=0;
 else if(a==='vf'){S.vf=d.k;S.pg.venc=1;}
@@ -657,7 +669,7 @@ else if(a==='dnot'){const n=S.tests.filter(x=>x.f===S.dd&&x.e!=='Reprogramar').l
 else if(a==='rsend'){const q=isP()?S.role:S.rs;S.msg='Resumen de '+PN[q]+' del '+fmt(S.dd)+' enviado al administrador y al analista (simulado): '+dayAct(q,S.dd).length+' actividades.';}
 else if(a==='cerrar'){const x=S.tests.find(t=>t.id===S.closing),c=S.cl;
 if(c.r==='Suspendida'&&!c.obs.trim())S.msg='Escribe las observaciones para suspender la prueba.';else if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)&&!(c.admt||'').trim()&&!x.adm)S.msg='Escribe las admisiones antes de cerrar la prueba (puedes indicar «Sin admisiones»).';
-else{x.obs=c.obs.trim();if((c.admt||'').trim())x.adm=c.admt.trim();if(c.pdf){x.pdf=c.pdf;if(c.pdff)PDFURL[x.id]=URL.createObjectURL(c.pdff);}if(x.t0){const mn=Math.round((Date.now()-x.t0)/60000);x.min=mn;if(mn>=10)x.dur=mn/60;x.hf=hhmm();(x.tl=x.tl||[]).push({k:'Fin',at:x.hf});}x.t0=null;if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)){x.e='Realizada';x.r=c.r;}else{x.e=c.r;x.r='';}
+else{x.obs=c.obs.trim();if((c.admt||'').trim())x.adm=c.admt.trim();if(c.pdf){x.pdf=c.pdf;if(c.pdff)PDFURL[x.id]=URL.createObjectURL(c.pdff);}if(x.t0){const mn=Math.round((Date.now()-x.t0)/60000);x.min=mn;if(mn>=10)x.dur=mn/60;x.hf=hhmm();(x.tl=x.tl||[]).push({k:'Fin',at:x.hf});}vivoDel('poli-'+x.id);x.t0=null;if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)){x.e='Realizada';x.r=c.r;}else{x.e=c.r;x.r='';}
 S.msg='Prueba cerrada como «'+c.r+'».'+(c.r==='Reprogramar'?' El horario quedó libre en el calendario.':'');S.closing=0;}}
 else if(a==='prog'){const F=S.form,lm=mails(F.lm),ce=F.ce.trim();if(!F.n.trim()||!F.h){S.msg='Falta el nombre del evaluado o elegir un horario.';}
 else if(!lm.length||lm.some(m=>!okm(m))){S.msg='Revisa los correos de los líderes: escribe uno o varios separados por coma.';}
@@ -672,9 +684,9 @@ S.queue=S.queue.filter(q=>q.doc!==F.doc);Object.assign(F,{n:'',doc:'',cargo:'',h
 else if(a==='phdel'){try{localStorage.removeItem('poli_ph_'+S.user[0]);}catch(e){}S.msg='Imagen eliminada.';}
 else if(a==='rmore')S.rlim=(S.rlim||100)+200;
 else if(a==='pp')S.pp=d.v;
-else if(a==='lstart'){const g=d.g,LV=S.lv[g]||{},o=(LV.o||'').trim();if(!o)S.msg='Escribe el nombre de la oficina para iniciar.';else{const p=isP()?S.role:(LV.p||'P1');S.live.push({id:Date.now(),g,p,o,t0:Date.now(),fase:0,tl:[{k:'Inicio',at:hhmm()}]});S.lv[g]={p:LV.p};S.msg=LA[g]+' iniciada en '+o+': el administrador y el analista ya la ven en ejecución.';}}
-else if(a==='lnext'){const x=S.live.find(z=>z.id===+d.id);if(x&&x.fase<PH[x.g].length-1){x.fase++;x.tl.push({k:PH[x.g][x.fase],at:hhmm()});S.msg='Etapa actual: '+PH[x.g][x.fase]+'.';}}
-else if(a==='lend'){const x=S.live.find(z=>z.id===+d.id);if(x){const at=hhmm();x.tl.push({k:'Fin',at});S.rf[x.g]={f:TODAY,o:x.o,ini:x.tl[0].at,fin:at,p:PN[x.p],_tl:x.tl};S.live=S.live.filter(z=>z!==x);S.msg=LA[x.g]+' finalizada ('+x.tl[0].at+' – '+at+'). Completa los datos y guarda el registro.';}}
+else if(a==='lstart'){const g=d.g,LV=S.lv[g]||{},o=(LV.o||'').trim();if(!o)S.msg='Escribe el nombre de la oficina para iniciar.';else{const p=isP()?S.role:(LV.p||'P1');{const nv={id:Date.now(),g,p,o,t0:Date.now(),fase:0,tl:[{k:'Inicio',at:hhmm()}]};S.live.push(nv);vivoA(nv);}S.lv[g]={p:LV.p};S.msg=LA[g]+' iniciada en '+o+': el administrador y el analista ya la ven en ejecución.';}}
+else if(a==='lnext'){const x=S.live.find(z=>z.id===+d.id);if(x&&x.fase<PH[x.g].length-1){x.fase++;x.tl.push({k:PH[x.g][x.fase],at:hhmm()});vivoA(x);S.msg='Etapa actual: '+PH[x.g][x.fase]+'.';}}
+else if(a==='lend'){const x=S.live.find(z=>z.id===+d.id);if(x){const at=hhmm();x.tl.push({k:'Fin',at});S.rf[x.g]={f:TODAY,o:x.o,ini:x.tl[0].at,fin:at,p:PN[x.p],_tl:x.tl};S.live=S.live.filter(z=>z!==x);vivoDel('act-'+x.id);S.msg=LA[x.g]+' finalizada ('+x.tl[0].at+' – '+at+'). Completa los datos y guarda el registro.';}}
 else if(a==='bconf')bConfirm();
 else if(a==='qclear')S.queue=[];
 else if(a==='dsa')S.dsel=PS.slice();
