@@ -971,7 +971,7 @@ const RLB={admin:'Administrador',analista:'Analista',poli:'Poligrafista',th:'Tal
 const VISTAS=['dash','cal','diaria','prog','res','resumen','venc','val','arq','cgm','form','imp','usr'];
 const PAL=['#EF4444','#0EA5E9','#EC4899','#84CC16','#F97316','#14B8A6','#6366F1','#A855F7'];
 const rkOf=r=>/^P\d/.test(r||'')?'poli':r;
-function menuDe(){const b=MENU[kind()];if(API&&Array.isArray(S.perm)){const v=S.perm.filter(x=>LBL[x]);['perm','clave'].forEach(z=>{if(!v.includes(z))v.push(z);});return v.length>2?v:b;}return b;}
+function menuDe(){const b=MENU[kind()];if(API&&Array.isArray(S.perm)){const v=S.perm.filter(x=>LBL[x]);(isP()?['imp','perm','clave']:['perm','clave']).forEach(z=>{if(!v.includes(z))v.push(z);});return v.length>2?v:b;}return b;}
 async function cargarEquipo(){try{const j=await api('/api/equipo');if(!j.ok)return;let ch=false;j.poligrafistas.forEach((r,i)=>{const nuevo=!PN[r.rol];if(nuevo)PS.push(r.rol);if(nuevo||+r.rol.slice(1)>4){PN[r.rol]=r.nombre;ZONA[r.rol]=r.zona||'Por definir';PC[r.rol]=r.color||PAL[i%PAL.length];ch=true;}});if(ch)render();}catch(e){}}
 S.au={list:null,busy:false,f:null,pw:null,err:''};
 const auTpl=r=>(MENU[rkOf(r)]||[]).filter(v=>v!=='clave'&&v!=='perm');
