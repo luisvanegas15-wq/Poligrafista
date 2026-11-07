@@ -76,6 +76,11 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'activo';
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS intentos INTEGER DEFAULT 0;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS bloqueado_hasta TIMESTAMPTZ;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_ingreso TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS planta (
+  cedula TEXT PRIMARY KEY,
+  datos JSONB NOT NULL DEFAULT '{}'::jsonb,
+  actualizado TIMESTAMPTZ DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS permisos (
   id SERIAL PRIMARY KEY,
   usuario TEXT NOT NULL,
@@ -174,7 +179,7 @@ app.get('/api/salud', async (req, res) => {
 });
 
 // ===== Autenticación =====
-app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => req.path === '/api/planta' ? next() : express.json({ limit: '1mb' })(req, res, next));
 
 const COOKIE = 'poli_sid';
 const HORAS_SESION = 12;
@@ -633,6 +638,41 @@ app.post('/api/permisos/:id/cancelar', async (req, res) => {
   const r = await pool.query("UPDATE permisos SET estado='cancelado' WHERE id=$1 AND (usuario=$2 OR $3) AND estado IN ('pendiente','aprobado') AND hasta >= CURRENT_DATE RETURNING id",
     [+req.params.id, u.usuario, u.rol === 'admin']);
   if (!r.rows[0]) return res.status(400).json({ ok: false, error: 'No se puede cancelar ese permiso.' });
+  res.json({ ok: true });
+});
+
+// ===== Datos de planta (columnas de la base de vencimientos: CONTRATO, REGIONAL, CLIENTE, C.C, ...) =====
+const LEEN_PLANTA = r => ['admin', 'analista', 'th'].includes(r) || /^P\d+$/.test(r || '');
+app.get('/api/planta', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  if (!LEEN_PLANTA(u.rol)) return res.json({ ok: true, planta: {}, total: 0 });
+  const r = await pool.query('SELECT cedula, datos FROM planta');
+  const m = {}; r.rows.forEach(x => { m[x.cedula] = x.datos; });
+  const t = await pool.query('SELECT max(actualizado) AS a FROM planta');
+  res.json({ ok: true, planta: m, total: r.rows.length, actualizado: t.rows[0].a });
+});
+app.post('/api/planta', express.json({ limit: '8mb' }), async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  if (!['admin', 'analista'].includes(u.rol)) return res.status(403).json({ ok: false, error: 'Solo administrador y analista pueden importar.' });
+  const filas = Array.isArray(req.body?.filas) ? req.body.filas : [];
+  const limpias = [];
+  for (const f of filas.slice(0, 5000)) {
+    const c = String(f?.c || '').replace(/\D/g, '').replace(/^0+/, '').slice(0, 20);
+    if (!c || typeof f.d !== 'object' || !f.d) continue;
+    const d = {};
+    for (const [k, v] of Object.entries(f.d).slice(0, 40)) if (v !== null && v !== '' && v !== undefined) d[String(k).slice(0, 60)] = String(v).slice(0, 200);
+    limpias.push({ c, d });
+  }
+  if (req.body?.reemplazar) await pool.query('DELETE FROM planta');
+  if (limpias.length) await pool.query(
+    `INSERT INTO planta (cedula, datos, actualizado) SELECT x.c, x.d, now() FROM jsonb_to_recordset($1::jsonb) AS x(c text, d jsonb)
+     ON CONFLICT (cedula) DO UPDATE SET datos = EXCLUDED.datos, actualizado = now()`, [JSON.stringify(limpias)]);
+  res.json({ ok: true, guardados: limpias.length });
+});
+app.delete('/api/planta', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  if (!['admin', 'analista'].includes(u.rol)) return res.status(403).json({ ok: false });
+  await pool.query('DELETE FROM planta');
   res.json({ ok: true });
 });
 
