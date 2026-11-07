@@ -193,6 +193,39 @@ h3{font-size:14px}.sb button{font-size:12.5px}.hero{padding:20px 24px}
 main>*{flex-shrink:0}
 @media(min-width:1101px){.shell{height:100vh;min-height:0;overflow:hidden}.sb{height:100vh;overflow-y:auto}.mn{height:100vh;display:flex;flex-direction:column;min-width:0;flex:1}#top{flex:none}.mn main{flex:1;min-height:0;overflow-y:auto}}
 @media(max-width:1100px){.hero h2{font-size:21px}.pt h2{font-size:19px}}
+.fl-wrap{max-width:460px;margin:32px auto 40px;padding:0 16px;width:100%;box-sizing:border-box}
+.fl-brand{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:18px}
+.fl-brand b{display:block;font-size:15px;font-weight:800;letter-spacing:.06em;color:var(--ink)}
+.fl-brand small{color:var(--mut);font-size:12px}
+.fl-card{background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 30px rgba(15,40,60,.08);overflow:hidden}
+.fl-head{display:flex;align-items:center;gap:14px;padding:18px 20px;background:linear-gradient(135deg,#0B2A5B,#0F766E);color:#fff}
+.fl-who{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.fl-who b{font-size:16px}
+.fl-who span:not(.chx){font-size:12.5px;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fl-who .chx{align-self:flex-start;margin-top:4px}
+.fl-ph{flex:none;font-size:12px;font-weight:600;padding:7px 12px;border-radius:99px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);cursor:pointer;white-space:nowrap}
+.fl-ph:hover{background:rgba(255,255,255,.26)}
+.fl-body{padding:22px 22px 18px}
+.fl-step{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--br);background:var(--okb);padding:3px 10px;border-radius:99px}
+.fl-body h2{margin:10px 0 4px;font-size:22px}
+.fl-sub{margin:0 0 16px;color:var(--mut);font-size:13.5px;line-height:1.45}
+.fl-f{display:block;margin-bottom:12px}
+.fl-f>span{display:block;font-size:12.5px;font-weight:600;color:var(--ink);margin-bottom:5px}
+.fl-f .iw input{max-width:none}
+.fl-sep{height:1px;background:var(--line);margin:6px 0 16px}
+.fl-req{list-style:none;padding:0;margin:4px 0 18px;display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}
+.fl-req li{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--mut)}
+.fl-req li i{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line);flex:none;display:grid;place-items:center;font-style:normal;font-size:10px}
+.fl-req li.ok{color:var(--ok);background:none;padding:0;border:0}
+.fl-req li.ok i{background:var(--ok);border-color:var(--ok)}
+.fl-req li.ok i::after{content:'✓';color:var(--card);font-weight:800}
+.fl-go{width:100%;margin:0}
+.fl-msg{padding:10px 12px;border-radius:12px;font-size:13px;margin:0 0 14px;background:var(--badb);color:var(--bad)}
+.fl-msg.ok{background:var(--okb);color:var(--ok)}
+.fl-foot{display:flex;align-items:center;justify-content:center;gap:6px;text-align:center;color:var(--mut);font-size:12px;margin:14px 0 0}
+.fl-foot svg{width:14px;height:14px;flex:none}
+@media(max-width:420px){.fl-foot{max-width:300px;margin-left:auto;margin-right:auto}}
+@media(max-width:420px){.fl-req{grid-template-columns:1fr}.fl-head{flex-wrap:wrap}.fl-body{padding:18px 16px}}
 </style>
 </head>
 <body>
@@ -613,11 +646,31 @@ try{localStorage.setItem('poli_ph_'+S.user[0],c.toDataURL('image/jpeg',.85));S.m
 im.onerror=()=>{S.msg='El archivo no es una imagen válida.';render();};im.src=url;});
 
 function vClave(){const u=USERS.find(x=>x[0]===S.user[0]);
-return vPerfil()+(PW[u[0]]?'':'<div class="note" style="background:var(--wab);color:var(--wa)">Estás usando la clave inicial. Cámbiala para que solo tú puedas entrar.</div>')+'<div class="card"><h3>Cambiar mi contraseña</h3><p class="mut">'+esc(u[0])+'</p><div class="f"><label>Clave actual<input type="password" data-pw="a" autocomplete="current-password" value="'+esc(S.pf.a)+'"></label><label>Nueva clave (mínimo 8 caracteres, con letras y números)<input type="password" data-pw="n" autocomplete="new-password" value="'+esc(S.pf.n)+'"></label><label>Repetir la nueva clave<input type="password" data-pw="r" autocomplete="new-password" value="'+esc(S.pf.r)+'"></label></div><button class="btn" type="button" data-act="pwsave">Guardar nueva clave</button></div>';}
+return vPerfil()+((API?!S.force:PW[u[0]])?'':'<div class="note" style="background:var(--wab);color:var(--wa)">Estás usando la clave inicial. Cámbiala para que solo tú puedas entrar.</div>')+'<div class="card"><h3>Cambiar mi contraseña</h3><p class="mut">'+esc(u[0])+'</p><div class="f"><label>Clave actual<input type="password" data-pw="a" autocomplete="current-password" value="'+esc(S.pf.a)+'"></label><label>Nueva clave (mínimo 8 caracteres, con letras y números)<input type="password" data-pw="n" autocomplete="new-password" value="'+esc(S.pf.n)+'"></label><label>Repetir la nueva clave<input type="password" data-pw="r" autocomplete="new-password" value="'+esc(S.pf.r)+'"></label></div><button class="btn" type="button" data-act="pwsave">Guardar nueva clave</button></div>';}
+/* ===== Primer ingreso: pantalla ordenada para crear la clave personal ===== */
+function flReq(){const f=S.pf||{},n=f.n||'';return [['8',n.length>=8,'Mínimo 8 caracteres'],['l',/[a-zA-Z]/.test(n),'Al menos una letra'],['d',/[0-9]/.test(n),'Al menos un número'],['m',!!n&&n===(f.r||''),'Ambas claves coinciden']];}
+function flChk(){flReq().forEach(([k,ok])=>{const e=document.getElementById('flr-'+k);if(e)e.classList.toggle('ok',ok);});}
+function vPrimer(){const u=S.user,k=rk(u[2]),ph=phGet(u[0]),f=S.pf,ok=/actualizada/i.test(S.msg||'');
+const ms=S.msg?'<div class="fl-msg'+(ok?' ok':'')+'" role="alert">'+esc(S.msg)+'</div>':'';
+const fld=(id,lab,ac,ph2)=>'<label class="fl-f"><span>'+lab+'</span><div class="iw">'+si('lock','l')+'<input type="password" data-pw="'+id+'" autocomplete="'+ac+'" placeholder="'+ph2+'" value="'+esc(f[id]||'')+'"></div></label>';
+return '<div class="fl-wrap"><div class="fl-brand"><span class="lg2">'+LOGO+'</span><div><b>SEGURIDAD Y RIESGOS</b><small>Polígrafías</small></div></div>'+
+'<div class="fl-card"><div class="fl-head">'+avHtml(u,64)+'<div class="fl-who"><b>'+esc(u[1])+'</b><span>'+esc(u[0])+'</span><span class="chx" style="background:'+k.bg+';color:'+k.c+'">'+esc(k.lv)+'</span></div>'+
+'<label class="fl-ph" title="Foto de perfil (opcional)">'+(ph?'Cambiar foto':'Subir foto')+'<input id="phf" type="file" accept="image/*" hidden></label></div>'+
+'<div class="fl-body"><span class="fl-step">Primer ingreso</span><h2>Crea tu clave personal</h2><p class="fl-sub">La clave temporal solo sirve para entrar esta vez. Define una clave que solo tú conozcas.</p>'+ms+
+fld('a','Clave temporal','current-password','La clave que te dio el administrador')+
+'<div class="fl-sep"></div>'+
+fld('n','Nueva clave','new-password','Escribe tu nueva clave')+
+fld('r','Repite la nueva clave','new-password','Vuelve a escribirla')+
+'<ul class="fl-req">'+flReq().map(([id,v,t])=>'<li id="flr-'+id+'" class="'+(v?'ok':'')+'"><i></i>'+t+'</li>').join('')+'</ul>'+
+'<button class="btn fl-go" type="button" data-act="pwsave">Guardar y entrar →</button>'+
+'<button type="button" class="lk" data-act="logout">Cancelar y salir</button></div></div>'+
+'<p class="fl-foot">'+si('lock')+' Tu clave se guarda cifrada. Nadie, ni el administrador, puede verla.</p></div>';}
+document.addEventListener('input',e=>{if(e.target&&e.target.dataset&&e.target.dataset.pw)setTimeout(flChk,0);});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&S.force&&e.target.dataset&&e.target.dataset.pw)pwsave();});
 function vCuentas(){return S.role!=='admin'?'':'<div class="card sc"><h3>Cuentas de usuario</h3>'+tbl(['Usuario','Correo','Clave',''],USERS.map(u=>['<span class="cu">'+avHtml(u,30)+esc(u[1])+'</span>',esc(u[0]),PW[u[0]]?pill('ok','Personalizada'):pill('wa','Inicial'),PW[u[0]]?'<button class="btn sm sec" type="button" data-act="pwreset" data-u="'+u[0]+'">Restablecer a la inicial</button>':'']))+'</div>';}
 
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.dataset&&e.target.dataset.l)doLogin();if(e.key==='Enter'&&e.target.id==='cin'){ask(e.target.value);render();}});
-function render(){hideTip();{const sh=document.querySelector&&document.querySelector('.shell');if(sh)sh.classList.toggle('lm',!S.user||!!S.force);}if(!S.user){document.getElementById('sb').style.display='none';document.getElementById('app').innerHTML=vLogin();renderChat();return;}if(S.force){document.getElementById('sb').style.display='none';document.getElementById('app').innerHTML='<div class="lg" style="max-width:460px;display:block"><h2>Crea tu clave personal</h2><p class="mut">Es tu primer ingreso: la clave temporal solo sirve para entrar esta vez. Define una clave que solo tú conozcas.</p>'+(S.msg?'<div class="note" style="margin-bottom:12px">'+S.msg+'</div>':'')+vClave()+'<p><button class="btn sm" type="button" data-act="logout">Cancelar</button></p></div>';document.getElementById('chat').innerHTML='';return;}document.getElementById('sb').style.display='';const m=MENU[kind()];if(!m.includes(S.view))S.view=m[0];
+function render(){hideTip();{const sh=document.querySelector&&document.querySelector('.shell');if(sh)sh.classList.toggle('lm',!S.user||!!S.force);}if(!S.user){document.getElementById('sb').style.display='none';document.getElementById('app').innerHTML=vLogin();renderChat();return;}if(S.force){document.getElementById('sb').style.display='none';document.getElementById('app').innerHTML=vPrimer();document.getElementById('chat').innerHTML='';flChk();return;}document.getElementById('sb').style.display='';const m=MENU[kind()];if(!m.includes(S.view))S.view=m[0];
 document.getElementById('sb').innerHTML='<div class="bd"><span class="lg2">'+LOGO+'</span><div><b>SEGURIDAD Y RIESGOS</b><small>Polígrafías</small></div></div><div class="ma"><div class="mav">'+avHtml(S.user,40)+'<div><b>'+esc(S.user[1])+'</b><small>'+esc(rk(S.role).lv)+'</small></div></div><span class="rp2">'+RN()+'</span></div><div class="nv">NAVEGACIÓN</div>'+(()=>{const pri=['dash','cal','prog','res','diaria','venc','resumen'].filter(v=>m.includes(v)).slice(0,4);return m.map(v=>'<button type="button" data-act="nav" data-v="'+v+'" class="'+(v===S.view?'on ':'')+(pri.includes(v)?'':'ex')+'">'+dot(v)+ic(v)+'<span class="lb">'+(NL[v]||LBL[v])+'</span><span class="sh">'+(SH[v]||LBL[v])+'</span></button>').join('')+'<button type="button" class="mo'+(S.more?' on':'')+'" data-act="more" aria-label="Más módulos"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span class="sh">Más</span></button>'+(S.more?'<div class="msh" data-act="more"><div class="msb"><div class="mst">Todos los módulos</div>'+m.map(v=>'<button type="button" class="mt'+(v===S.view?' on':'')+'" data-act="nav" data-v="'+v+'">'+ic(v)+'<span>'+(NL[v]||LBL[v])+'</span></button>').join('')+'<button type="button" class="mt out2" data-act="logout"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#FCA5A5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span>Cerrar sesión</span></button></div></div>':'');})();
 document.body.classList.toggle('mo-open',!!S.more);document.getElementById('top').innerHTML='<div><div class="ttl">'+LBL[S.view]+'</div><div class="mut">'+D(TODAY).toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+'</div></div><div class="hr"><span class="rp3">'+RN()+'</span><div class="uc">'+avHtml(S.user,36)+'<div class="un"><b>'+esc(S.user[1])+'</b><small>'+esc(S.user[0])+'</small></div></div><button type="button" class="lo" data-act="logout">Cerrar sesión</button></div>';
 const v=S.view,V=v==='dash'?vDash():v==='cal'?vCal():v==='prog'?vProg():v==='res'?vRes():v==='venc'?vVenc():v==='form'?vForm():v==='usr'?vUsr():v==='clave'?vClave():v==='imp'?vImp():v==='diaria'?vDia():v==='resumen'?vResumen():vRec(v);
