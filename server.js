@@ -69,6 +69,9 @@ CREATE TABLE IF NOT EXISTS vencimientos (
 );
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS hash_legado TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS debe_cambiar BOOLEAN DEFAULT TRUE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permisos JSONB;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono TEXT;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS color TEXT;
 CREATE TABLE IF NOT EXISTS en_vivo (
   id TEXT PRIMARY KEY,
   tipo TEXT NOT NULL,
@@ -150,7 +153,7 @@ function igualLegado(correo, clave, legado) {
   const l = Buffer.from(String(legado));
   return h.length === l.length && crypto.timingSafeEqual(h, l);
 }
-const publico = u => ({ usuario: u.usuario, nombre: u.nombre, rol: u.rol, debe_cambiar: u.debe_cambiar });
+const publico = u => ({ usuario: u.usuario, nombre: u.nombre, rol: u.rol, debe_cambiar: u.debe_cambiar, permisos: u.permisos || null });
 
 async function usuarioDeSesion(req) {
   const t = leerCookie(req, COOKIE);
@@ -264,6 +267,102 @@ app.delete('/api/vivo/:id', async (req, res) => {
   if (prev.rows[0] && !puedeEscribir(u, prev.rows[0].poligrafista)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
   await pool.query('DELETE FROM en_vivo WHERE id = $1', [req.params.id]);
   res.json({ ok: true });
+});
+
+// ===== Administración de usuarios (solo administrador) =====
+const ROLES_OK = ['admin', 'analista', 'poli', 'th', 'lider'];
+const VISTAS_OK = ['dash', 'cal', 'diaria', 'prog', 'res', 'resumen', 'venc', 'val', 'arq', 'cgm', 'form', 'usr', 'imp', 'clave'];
+const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function claveTemporal() {
+  const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz', d = '23456789';
+  let c = '';
+  for (let i = 0; i < 6; i++) c += a[crypto.randomInt(a.length)];
+  for (let i = 0; i < 3; i++) c += d[crypto.randomInt(d.length)];
+  return 'Poli-' + c;
+}
+function limpiarPermisos(p) {
+  if (p == null) return null;
+  if (!Array.isArray(p)) return null;
+  const v = [...new Set(p.map(String).filter(x => VISTAS_OK.includes(x)))];
+  if (!v.includes('clave')) v.push('clave');
+  return v;
+}
+async function soloAdmin(req, res) {
+  const u = await conSesion(req, res); if (!u) return null;
+  if (u.rol !== 'admin') { res.status(403).json({ ok: false, error: 'Solo el administrador puede hacer esto.' }); return null; }
+  return u;
+}
+const filaUsuario = r => ({ id: r.id, usuario: r.usuario, nombre: r.nombre, rol: r.rol, zona: r.zona, telefono: r.telefono, color: r.color,
+  permisos: r.permisos || null, activo: r.activo, clave: r.debe_cambiar ? 'temporal' : 'personal' });
+
+app.get('/api/usuarios', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  const r = await pool.query('SELECT * FROM usuarios ORDER BY id');
+  res.json({ ok: true, usuarios: r.rows.map(filaUsuario) });
+});
+
+app.post('/api/usuarios', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  const b = req.body || {};
+  const nombre = String(b.nombre || '').trim().slice(0, 80);
+  const correo = String(b.correo || '').trim().toLowerCase().slice(0, 120);
+  let rol = String(b.rol || '');
+  if (!nombre) return res.status(400).json({ ok: false, error: 'Escribe el nombre.' });
+  if (!CORREO_RE.test(correo)) return res.status(400).json({ ok: false, error: 'El correo no es válido.' });
+  if (!ROLES_OK.includes(rol)) return res.status(400).json({ ok: false, error: 'Elige un rol.' });
+  const ex = await pool.query('SELECT 1 FROM usuarios WHERE usuario = $1', [correo]);
+  if (ex.rows.length) return res.status(400).json({ ok: false, error: 'Ya existe un usuario con ese correo.' });
+  if (rol === 'poli') {
+    const m = await pool.query("SELECT COALESCE(MAX(substring(rol from 2)::int), 0) AS n FROM usuarios WHERE rol ~ '^P[0-9]+$'");
+    rol = 'P' + (Math.max(4, m.rows[0].n) + 1);
+  }
+  const clave = claveTemporal();
+  const hash = await bcrypt.hash(clave, 12);
+  const r = await pool.query(
+    `INSERT INTO usuarios (usuario, nombre, rol, correo, zona, telefono, color, permisos, password_hash, debe_cambiar)
+     VALUES ($1,$2,$3,$1,$4,$5,$6,$7,$8,TRUE) RETURNING *`,
+    [correo, nombre, rol, String(b.zona || '').slice(0, 60) || null, String(b.telefono || '').slice(0, 30) || null,
+     /^#[0-9a-fA-F]{6}$/.test(b.color || '') ? b.color : null, JSON.stringify(limpiarPermisos(b.permisos)), hash]
+  );
+  res.json({ ok: true, usuario: filaUsuario(r.rows[0]), clave });
+});
+
+app.put('/api/usuarios/:id', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  const id = +req.params.id, b = req.body || {};
+  const cur = (await pool.query('SELECT * FROM usuarios WHERE id = $1', [id])).rows[0];
+  if (!cur) return res.status(404).json({ ok: false, error: 'Usuario no encontrado.' });
+  if (cur.id === u.id && b.activo === false) return res.status(400).json({ ok: false, error: 'No puedes desactivar tu propia cuenta.' });
+  const nombre = b.nombre !== undefined ? String(b.nombre).trim().slice(0, 80) : cur.nombre;
+  if (!nombre) return res.status(400).json({ ok: false, error: 'Escribe el nombre.' });
+  const permisos = b.permisos !== undefined ? limpiarPermisos(b.permisos) : cur.permisos;
+  if (cur.id === u.id && permisos && !permisos.includes('usr')) return res.status(400).json({ ok: false, error: 'No puedes quitarte el acceso a Usuarios.' });
+  const r = await pool.query(
+    `UPDATE usuarios SET nombre=$1, zona=$2, telefono=$3, color=$4, permisos=$5, activo=$6 WHERE id=$7 RETURNING *`,
+    [nombre, b.zona !== undefined ? (String(b.zona).slice(0, 60) || null) : cur.zona,
+     b.telefono !== undefined ? (String(b.telefono).slice(0, 30) || null) : cur.telefono,
+     b.color !== undefined ? (/^#[0-9a-fA-F]{6}$/.test(b.color) ? b.color : null) : cur.color,
+     JSON.stringify(permisos), b.activo !== undefined ? !!b.activo : cur.activo, id]
+  );
+  if (b.activo === false) await pool.query('DELETE FROM sesiones WHERE usuario_id = $1', [id]);
+  res.json({ ok: true, usuario: filaUsuario(r.rows[0]) });
+});
+
+app.post('/api/usuarios/:id/clave', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  const clave = claveTemporal();
+  const r = await pool.query('UPDATE usuarios SET password_hash=$1, hash_legado=NULL, debe_cambiar=TRUE WHERE id=$2 RETURNING *',
+    [await bcrypt.hash(clave, 12), +req.params.id]);
+  if (!r.rows[0]) return res.status(404).json({ ok: false, error: 'Usuario no encontrado.' });
+  await pool.query('DELETE FROM sesiones WHERE usuario_id = $1', [+req.params.id]);
+  res.json({ ok: true, usuario: filaUsuario(r.rows[0]), clave });
+});
+
+// Equipo de poligrafistas activos (para calendarios, dashboard y listas)
+app.get('/api/equipo', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const r = await pool.query("SELECT rol, nombre, zona, color FROM usuarios WHERE rol ~ '^P[0-9]+$' AND activo ORDER BY substring(rol from 2)::int");
+  res.json({ ok: true, poligrafistas: r.rows });
 });
 
 app.use(express.static(__dirname, { index: 'index.html', extensions: ['html'] }));
