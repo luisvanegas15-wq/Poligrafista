@@ -189,7 +189,7 @@ app.get('/api/salud', async (req, res) => {
 });
 
 // ===== Autenticación =====
-app.use((req, res, next) => ['/api/planta', '/api/resultados/importar'].includes(req.path) ? next() : express.json({ limit: '1mb' })(req, res, next));
+app.use((req, res, next) => ['/api/planta', '/api/resultados/importar', '/api/drive/subir'].includes(req.path) ? next() : express.json({ limit: '1mb' })(req, res, next));
 
 const COOKIE = 'poli_sid';
 const HORAS_SESION = 12;
@@ -763,6 +763,139 @@ app.delete('/api/repositorios/:id', async (req, res) => {
   const u = await soloAdmin(req, res); if (!u) return;
   await pool.query('DELETE FROM repositorios WHERE id=$1', [+req.params.id]);
   res.json({ ok: true });
+});
+
+// ===== Subida directa a Google Drive (cuenta de servicio, unidad compartida) =====
+// Variable en Railway: GOOGLE_SERVICE_ACCOUNT_JSON = contenido completo del archivo JSON de la cuenta de servicio.
+const DRIVE = process.env.DRIVE_API_BASE || 'https://www.googleapis.com';
+const TOKEN_URL = process.env.DRIVE_TOKEN_URL || 'https://oauth2.googleapis.com/token';
+let SA = null;
+try { if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) SA = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON); } catch (e) { console.error('GOOGLE_SERVICE_ACCOUNT_JSON no es un JSON válido'); }
+let tokenCache = { t: null, exp: 0 };
+const b64u = b => Buffer.from(b).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+async function gToken() {
+  if (!SA) throw new Error('Drive no está conectado');
+  if (tokenCache.t && Date.now() < tokenCache.exp - 60000) return tokenCache.t;
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const body = b64u(JSON.stringify({ iss: SA.client_email, scope: 'https://www.googleapis.com/auth/drive', aud: TOKEN_URL, iat: now, exp: now + 3600 }));
+  const sig = crypto.createSign('RSA-SHA256').update(head + '.' + body).sign(SA.private_key).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const r = await fetch(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=' + encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer') + '&assertion=' + head + '.' + body + '.' + sig });
+  const j = await r.json(); if (!j.access_token) throw new Error('No se pudo autenticar con Google');
+  tokenCache = { t: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 }; return j.access_token;
+}
+async function gApi(path, opt = {}) {
+  const t = await gToken();
+  const r = await fetch(DRIVE + path, { ...opt, headers: { Authorization: 'Bearer ' + t, ...(opt.headers || {}) } });
+  if (!r.ok) { const tx = await r.text(); const e = new Error('Drive ' + r.status + ': ' + tx.slice(0, 200)); e.status = r.status; throw e; }
+  return r.status === 204 ? {} : r.json();
+}
+const ALL = 'supportsAllDrives=true&includeItemsFromAllDrives=true';
+const FOLDER = 'application/vnd.google-apps.folder';
+const idDeUrl = u => { const m = String(u || '').match(/\/folders\/([A-Za-z0-9_-]{10,})/) || String(u || '').match(/[?&]id=([A-Za-z0-9_-]{10,})/); return m ? m[1] : null; };
+const qEsc = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+async function hijos(parent, soloCarpetas) {
+  const q = "'" + qEsc(parent) + "' in parents and trashed=false" + (soloCarpetas ? " and mimeType='" + FOLDER + "'" : '');
+  let out = [], pt = '';
+  do {
+    const j = await gApi('/drive/v3/files?' + ALL + '&corpora=allDrives&pageSize=200&orderBy=folder,name&fields=nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)&q=' + encodeURIComponent(q) + (pt ? '&pageToken=' + pt : ''));
+    out = out.concat(j.files || []); pt = j.nextPageToken || '';
+  } while (pt && out.length < 1000);
+  return out;
+}
+async function crearCarpeta(parent, nombre) {
+  return gApi('/drive/v3/files?supportsAllDrives=true&fields=id,name,webViewLink', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: nombre, mimeType: FOLDER, parents: [parent] }) });
+}
+// Verifica que 'carpeta' esté dentro de la carpeta raíz del repositorio (hasta 8 niveles)
+async function dentroDe(carpeta, raiz) {
+  let id = carpeta;
+  for (let i = 0; i < 8 && id; i++) {
+    if (id === raiz) return true;
+    const f = await gApi('/drive/v3/files/' + encodeURIComponent(id) + '?supportsAllDrives=true&fields=id,parents');
+    id = (f.parents || [])[0];
+  }
+  return false;
+}
+async function repoPermitido(u, id) {
+  const r = (await pool.query('SELECT * FROM repositorios WHERE id = $1', [+id])).rows[0];
+  if (!r) return null;
+  if (u.rol === 'lider') return null;
+  if (/^P\d+$/.test(u.rol) && r.poligrafista && r.poligrafista !== u.rol) return null;
+  r.raiz = idDeUrl(r.url); return r.raiz ? r : null;
+}
+function errDrive(res, e) {
+  console.error('drive:', e.message);
+  const m = !SA ? 'Drive aún no está conectado. El administrador debe configurar la cuenta de servicio.'
+    : e.status === 404 ? 'La cuenta de servicio no tiene acceso a esa carpeta. Agrégala como miembro de la unidad compartida.'
+    : e.status === 403 ? 'Sin permiso en Drive para esa carpeta (revisa que la cuenta de servicio sea Administrador de contenido).'
+    : 'No se pudo completar la operación en Drive.';
+  res.status(e.status === 404 || e.status === 403 ? 400 : 500).json({ ok: false, error: m });
+}
+app.get('/api/drive/estado', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  res.json({ ok: true, conectado: !!SA, cuenta: SA && u.rol === 'admin' ? SA.client_email : undefined });
+});
+app.get('/api/drive/carpeta', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  try {
+    const r = await repoPermitido(u, req.query.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
+    const id = String(req.query.id || r.raiz);
+    if (id !== r.raiz && !(await dentroDe(id, r.raiz))) return res.status(403).json({ ok: false, error: 'Esa carpeta no pertenece al repositorio.' });
+    const f = await gApi('/drive/v3/files/' + encodeURIComponent(id) + '?supportsAllDrives=true&fields=id,name,webViewLink');
+    const items = await hijos(id, false);
+    res.json({ ok: true, carpeta: f, carpetas: items.filter(x => x.mimeType === FOLDER), archivos: items.filter(x => x.mimeType !== FOLDER) });
+  } catch (e) { errDrive(res, e); }
+});
+// Busca o crea una ruta de subcarpetas (p. ej. ["2026", "11 NOVIEMBRE"]) dentro del repositorio
+app.post('/api/drive/ruta', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  try {
+    const r = await repoPermitido(u, req.body?.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
+    let id = String(req.body?.desde || r.raiz);
+    if (id !== r.raiz && !(await dentroDe(id, r.raiz))) return res.status(403).json({ ok: false, error: 'Esa carpeta no pertenece al repositorio.' });
+    const partes = (Array.isArray(req.body?.partes) ? req.body.partes : []).slice(0, 4), camino = [];
+    for (const p of partes) {
+      const opciones = (Array.isArray(p) ? p : [p]).map(x => String(x).trim().slice(0, 120)).filter(Boolean);
+      if (!opciones.length) continue;
+      const hs = await hijos(id, true), norm = x => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+      const hit = hs.find(h => opciones.some(o => norm(h.name) === norm(o))) || hs.find(h => opciones.slice(1).some(o => norm(h.name).split(' ').includes(norm(o))));
+      if (hit) { id = hit.id; camino.push({ id, name: hit.name }); } else { const c = await crearCarpeta(id, opciones[0]); id = c.id; camino.push({ id, name: opciones[0] }); }
+    }
+    res.json({ ok: true, id, camino });
+  } catch (e) { errDrive(res, e); }
+});
+app.post('/api/drive/nueva', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  try {
+    const r = await repoPermitido(u, req.body?.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
+    const padre = String(req.body?.padre || r.raiz), nombre = String(req.body?.nombre || '').trim().slice(0, 120);
+    if (!nombre) return res.status(400).json({ ok: false, error: 'Escribe el nombre de la carpeta.' });
+    if (padre !== r.raiz && !(await dentroDe(padre, r.raiz))) return res.status(403).json({ ok: false, error: 'Esa carpeta no pertenece al repositorio.' });
+    const f = await crearCarpeta(padre, nombre); res.json({ ok: true, id: f.id });
+  } catch (e) { errDrive(res, e); }
+});
+// Subida en streaming (sirve para PDF, imágenes y videos grandes): el cuerpo es el archivo
+app.post('/api/drive/subir', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  try {
+    const r = await repoPermitido(u, req.query.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
+    const destino = String(req.query.carpeta || r.raiz), nombre = String(req.query.nombre || 'archivo').slice(0, 200);
+    if (destino !== r.raiz && !(await dentroDe(destino, r.raiz))) return res.status(403).json({ ok: false, error: 'Esa carpeta no pertenece al repositorio.' });
+    const tipo = String(req.headers['content-type'] || 'application/octet-stream'), largo = req.headers['content-length'];
+    if (!largo) return res.status(411).json({ ok: false, error: 'Falta el tamaño del archivo.' });
+    const t = await gToken();
+    const ini = await fetch(DRIVE + '/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': tipo, 'X-Upload-Content-Length': largo },
+      body: JSON.stringify({ name: nombre, parents: [destino], description: 'Subido desde Polígrafías por ' + u.nombre }) });
+    if (!ini.ok) { const e = new Error('Drive ' + ini.status + ': ' + (await ini.text()).slice(0, 200)); e.status = ini.status; throw e; }
+    const sesion = ini.headers.get('location');
+    const up = await fetch(sesion, { method: 'PUT', headers: { 'Content-Type': tipo, 'Content-Length': largo }, body: req, duplex: 'half' });
+    if (!up.ok) { const e = new Error('Drive ' + up.status + ': ' + (await up.text()).slice(0, 200)); e.status = up.status; throw e; }
+    const f = await up.json();
+    res.json({ ok: true, archivo: f });
+  } catch (e) { errDrive(res, e); }
 });
 
 app.use(express.static(__dirname, { index: 'index.html', extensions: ['html'] }));
