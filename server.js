@@ -73,6 +73,24 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permisos JSONB;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS color TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'activo';
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS intentos INTEGER DEFAULT 0;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS bloqueado_hasta TIMESTAMPTZ;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_ingreso TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS permisos (
+  id SERIAL PRIMARY KEY,
+  usuario TEXT NOT NULL,
+  tipo TEXT NOT NULL,
+  desde DATE NOT NULL,
+  hasta DATE NOT NULL,
+  hora_ini TIME,
+  hora_fin TIME,
+  motivo TEXT,
+  estado TEXT DEFAULT 'pendiente',   -- pendiente, aprobado, rechazado, cancelado
+  respuesta TEXT,
+  resuelto_por TEXT,
+  resuelto TIMESTAMPTZ,
+  creado TIMESTAMPTZ DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS mensajes (
   id SERIAL PRIMARY KEY,
   de TEXT NOT NULL,
@@ -202,19 +220,39 @@ app.post('/api/login', async (req, res) => {
   try {
     const r = await pool.query('SELECT * FROM usuarios WHERE usuario = $1', [correo]);
     const u = r.rows[0];
+    if (u && u.bloqueado_hasta && new Date(u.bloqueado_hasta) > new Date()) {
+      const min = Math.ceil((new Date(u.bloqueado_hasta) - Date.now()) / 60000);
+      return res.status(423).json({ ok: false, error: 'Cuenta bloqueada por intentos fallidos. Intenta en ' + min + ' min o pide al administrador que la desbloquee.' });
+    }
     let ok = false;
     if (u && u.password_hash) ok = await bcrypt.compare(clave, u.password_hash);
     else if (u && u.hash_legado) {
       ok = igualLegado(correo, clave, u.hash_legado);
     }
-    if (!ok) { reg.push(ahora); intentos.set(k, reg); return res.status(401).json({ ok: false, error: 'Correo o contraseña incorrectos.' }); }
+    if (!ok) {
+      reg.push(ahora); intentos.set(k, reg);
+      if (u) {
+        const n = (u.intentos || 0) + 1;
+        if (n >= 5) {
+          await pool.query("UPDATE usuarios SET intentos = 0, bloqueado_hasta = now() + interval '15 minutes' WHERE id = $1", [u.id]);
+          await avisar('rol:admin', 'acceso', 'Cuenta bloqueada: ' + u.nombre, u.usuario + ' superó 5 intentos fallidos. Se desbloquea sola en 15 min, o puedes desbloquearla en Usuarios y roles.', u.usuario, { correo: u.usuario });
+          return res.status(423).json({ ok: false, error: 'Cuenta bloqueada por 5 intentos fallidos. Intenta en 15 min o pide al administrador que la desbloquee.' });
+        }
+        await pool.query('UPDATE usuarios SET intentos = $1 WHERE id = $2', [n, u.id]);
+        return res.status(401).json({ ok: false, error: 'Correo o contraseña incorrectos.' });
+      }
+      return res.status(401).json({ ok: false, error: 'Correo o contraseña incorrectos.' });
+    }
     intentos.delete(k);
     if (u.estado === 'pendiente') return res.status(403).json({ ok: false, error: 'Tu solicitud de cuenta está pendiente. El administrador debe aprobarla antes de que puedas ingresar.' });
     if (!u.activo) return res.status(403).json({ ok: false, error: 'Tu cuenta está desactivada. Contacta al administrador.' });
+    const previo = u.ultimo_ingreso;
+    await pool.query('UPDATE usuarios SET intentos = 0, bloqueado_hasta = NULL, ultimo_ingreso = now() WHERE id = $1', [u.id]);
+    u.previo = previo;
     const token = crypto.randomBytes(32).toString('hex');
     await pool.query("INSERT INTO sesiones (token, usuario_id, expira) VALUES ($1, $2, now() + interval '" + HORAS_SESION + " hours')", [token, u.id]);
     ponerCookie(res, token, HORAS_SESION * 3600);
-    res.json({ ok: true, user: publico(u) });
+    res.json({ ok: true, user: publico(u), bienvenida: { previo: u.previo || null } });
   } catch (e) { console.error('login:', e.message); res.status(500).json({ ok: false, error: 'Error del servidor.' }); }
 });
 
@@ -299,7 +337,7 @@ app.delete('/api/vivo/:id', async (req, res) => {
 
 // ===== Administración de usuarios (solo administrador) =====
 const ROLES_OK = ['admin', 'analista', 'poli', 'th', 'lider'];
-const VISTAS_OK = ['dash', 'cal', 'diaria', 'prog', 'res', 'resumen', 'venc', 'val', 'arq', 'cgm', 'form', 'usr', 'imp', 'clave'];
+const VISTAS_OK = ['dash', 'cal', 'diaria', 'prog', 'res', 'resumen', 'venc', 'val', 'arq', 'cgm', 'form', 'usr', 'imp', 'clave', 'perm'];
 const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function claveTemporal() {
   const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz', d = '23456789';
@@ -320,7 +358,7 @@ async function soloAdmin(req, res) {
   if (u.rol !== 'admin') { res.status(403).json({ ok: false, error: 'Solo el administrador puede hacer esto.' }); return null; }
   return u;
 }
-const filaUsuario = r => ({ id: r.id, estado: r.estado || 'activo', usuario: r.usuario, nombre: r.nombre, rol: r.rol, zona: r.zona, telefono: r.telefono, color: r.color,
+const filaUsuario = r => ({ id: r.id, estado: r.estado || 'activo', bloqueado: !!(r.bloqueado_hasta && new Date(r.bloqueado_hasta) > new Date()), ultimo: r.ultimo_ingreso, usuario: r.usuario, nombre: r.nombre, rol: r.rol, zona: r.zona, telefono: r.telefono, color: r.color,
   permisos: r.permisos || null, activo: r.activo, clave: r.debe_cambiar ? 'temporal' : 'personal' });
 
 app.get('/api/usuarios', async (req, res) => {
@@ -389,11 +427,19 @@ app.put('/api/usuarios/:id', async (req, res) => {
 app.post('/api/usuarios/:id/clave', async (req, res) => {
   const u = await soloAdmin(req, res); if (!u) return;
   const clave = claveTemporal();
-  const r = await pool.query('UPDATE usuarios SET password_hash=$1, hash_legado=NULL, debe_cambiar=TRUE WHERE id=$2 RETURNING *',
+  const r = await pool.query('UPDATE usuarios SET password_hash=$1, hash_legado=NULL, debe_cambiar=TRUE, intentos=0, bloqueado_hasta=NULL WHERE id=$2 RETURNING *',
     [await bcrypt.hash(clave, 12), +req.params.id]);
   if (!r.rows[0]) return res.status(404).json({ ok: false, error: 'Usuario no encontrado.' });
   await pool.query('DELETE FROM sesiones WHERE usuario_id = $1', [+req.params.id]);
   res.json({ ok: true, usuario: filaUsuario(r.rows[0]), clave });
+});
+
+app.post('/api/usuarios/:id/desbloquear', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  const r = await pool.query('UPDATE usuarios SET intentos=0, bloqueado_hasta=NULL, activo=TRUE WHERE id=$1 AND estado <> $2 RETURNING *', [+req.params.id, 'pendiente']);
+  if (!r.rows[0]) return res.status(404).json({ ok: false, error: 'Usuario no encontrado.' });
+  for (const k of [...intentos.keys()]) if (k.startsWith(r.rows[0].usuario + '|')) intentos.delete(k);
+  res.json({ ok: true, usuario: filaUsuario(r.rows[0]) });
 });
 
 // Equipo de poligrafistas activos (para calendarios, dashboard y listas)
@@ -518,6 +564,75 @@ app.post('/api/ayuda', async (req, res) => {
   const ad = await pool.query("SELECT usuario FROM usuarios WHERE rol = 'admin' AND activo AND usuario <> $1", [u.usuario]);
   for (const a of ad.rows) await pool.query('INSERT INTO mensajes (de, para, texto) VALUES ($1,$2,$3)', [u.usuario, a.usuario, '🛟 Solicitud de ayuda: ' + texto]);
   await avisar('rol:admin', 'ayuda', u.nombre + ' pide ayuda', texto, u.usuario, { correo: u.usuario });
+  res.json({ ok: true });
+});
+
+// ===== Permisos y ausencias (compensatorios, citas médicas, vacaciones, otros) =====
+const TIPOS_PERMISO = ['Compensatorio', 'Cita médica', 'Vacaciones', 'Calamidad doméstica', 'Licencia', 'Capacitación', 'Otro'];
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/, HORA_RE = /^\d{2}:\d{2}/;
+const filaPermiso = r => ({ id: r.id, usuario: r.usuario, nombre: r.nombre, rol: r.rol, tipo: r.tipo, desde: r.desde_t, hasta: r.hasta_t,
+  hora_ini: r.hora_ini ? String(r.hora_ini).slice(0, 5) : null, hora_fin: r.hora_fin ? String(r.hora_fin).slice(0, 5) : null,
+  motivo: r.motivo, estado: r.estado, respuesta: r.respuesta, resuelto_por: r.resuelto_por, creado: r.creado });
+const SQL_PERMISOS = `SELECT p.*, to_char(p.desde,'YYYY-MM-DD') AS desde_t, to_char(p.hasta,'YYYY-MM-DD') AS hasta_t, u.nombre, u.rol
+  FROM permisos p LEFT JOIN usuarios u ON u.usuario = p.usuario`;
+
+app.get('/api/permisos', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const r = u.rol === 'admin'
+    ? await pool.query(SQL_PERMISOS + ' ORDER BY (p.estado = $1) DESC, p.desde DESC LIMIT 300', ['pendiente'])
+    : await pool.query(SQL_PERMISOS + ' WHERE p.usuario = $1 ORDER BY p.desde DESC LIMIT 200', [u.usuario]);
+  res.json({ ok: true, permisos: r.rows.map(filaPermiso), tipos: TIPOS_PERMISO });
+});
+
+// Permisos aprobados de poligrafistas: bloquean la agenda
+app.get('/api/permisos/agenda', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const r = await pool.query(SQL_PERMISOS + " WHERE p.estado = 'aprobado' AND p.hasta >= CURRENT_DATE - 60 AND u.rol ~ '^P[0-9]+$'");
+  res.json({ ok: true, permisos: r.rows.map(x => { const f = filaPermiso(x); delete f.motivo; delete f.respuesta; return f; }) });
+});
+
+app.post('/api/permisos', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const b = req.body || {};
+  const para = u.rol === 'admin' && b.usuario ? String(b.usuario).toLowerCase() : u.usuario;
+  const tipo = TIPOS_PERMISO.includes(b.tipo) ? b.tipo : null;
+  const desde = String(b.desde || ''), hasta = String(b.hasta || b.desde || '');
+  const hi = HORA_RE.test(b.hora_ini || '') ? b.hora_ini.slice(0, 5) : null, hf = HORA_RE.test(b.hora_fin || '') ? b.hora_fin.slice(0, 5) : null;
+  if (!tipo) return res.status(400).json({ ok: false, error: 'Elige el tipo de permiso.' });
+  if (!FECHA_RE.test(desde) || !FECHA_RE.test(hasta) || hasta < desde) return res.status(400).json({ ok: false, error: 'Revisa las fechas (la final no puede ser antes de la inicial).' });
+  if ((hi || hf) && (!hi || !hf || hf <= hi)) return res.status(400).json({ ok: false, error: 'Si es por horas, pon hora de inicio y de fin (la de fin después).' });
+  if ((hi || hf) && desde !== hasta) return res.status(400).json({ ok: false, error: 'Un permiso por horas debe ser de un solo día.' });
+  const dest = (await pool.query("SELECT usuario, nombre FROM usuarios WHERE usuario = $1 AND activo", [para])).rows[0];
+  if (!dest) return res.status(400).json({ ok: false, error: 'Funcionario no válido.' });
+  const directo = u.rol === 'admin';
+  const r = await pool.query(
+    `INSERT INTO permisos (usuario, tipo, desde, hasta, hora_ini, hora_fin, motivo, estado, resuelto_por, resuelto)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+    [para, tipo, desde, hasta, hi, hf, String(b.motivo || '').trim().slice(0, 600) || null, directo ? 'aprobado' : 'pendiente',
+     directo ? u.nombre : null, directo ? new Date() : null]);
+  const rango = desde === hasta ? desde + (hi ? ' de ' + hi + ' a ' + hf : '') : desde + ' a ' + hasta;
+  if (directo) { if (para !== u.usuario) await avisar(para, 'permiso', 'Permiso registrado: ' + tipo, 'El administrador registró tu permiso (' + rango + ').', u.usuario, { id: r.rows[0].id }); }
+  else await avisar('rol:admin', 'permiso', 'Solicitud de permiso: ' + dest.nombre, tipo + ' · ' + rango + (b.motivo ? '\n' + String(b.motivo).slice(0, 200) : ''), u.usuario, { id: r.rows[0].id });
+  res.json({ ok: true, id: r.rows[0].id, estado: directo ? 'aprobado' : 'pendiente' });
+});
+
+app.post('/api/permisos/:id/resolver', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  const estado = req.body?.estado === 'aprobado' ? 'aprobado' : req.body?.estado === 'rechazado' ? 'rechazado' : null;
+  if (!estado) return res.status(400).json({ ok: false });
+  const r = await pool.query(`UPDATE permisos SET estado=$1, respuesta=$2, resuelto_por=$3, resuelto=now() WHERE id=$4 AND estado='pendiente'
+    RETURNING usuario, tipo, to_char(desde,'YYYY-MM-DD') AS d, to_char(hasta,'YYYY-MM-DD') AS h`,
+    [estado, String(req.body?.respuesta || '').slice(0, 400) || null, u.nombre, +req.params.id]);
+  const p = r.rows[0]; if (!p) return res.status(400).json({ ok: false, error: 'Ese permiso ya fue resuelto.' });
+  await avisar(p.usuario, 'permiso', 'Permiso ' + estado + ': ' + p.tipo, (p.d === p.h ? p.d : p.d + ' a ' + p.h) + (req.body?.respuesta ? '\n' + String(req.body.respuesta).slice(0, 300) : ''), u.usuario, { id: +req.params.id });
+  res.json({ ok: true });
+});
+
+app.post('/api/permisos/:id/cancelar', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const r = await pool.query("UPDATE permisos SET estado='cancelado' WHERE id=$1 AND (usuario=$2 OR $3) AND estado IN ('pendiente','aprobado') AND hasta >= CURRENT_DATE RETURNING id",
+    [+req.params.id, u.usuario, u.rol === 'admin']);
+  if (!r.rows[0]) return res.status(400).json({ ok: false, error: 'No se puede cancelar ese permiso.' });
   res.json({ ok: true });
 });
 
