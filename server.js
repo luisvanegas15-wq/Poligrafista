@@ -1220,6 +1220,8 @@ app.post('/api/drive/subir', async (req, res) => {
 });
 
 // ===== Pruebas agendadas desde la app (compartidas entre todos los usuarios) =====
+const CAMPOS_BLOQ = ['r', 'e', 'adm', 'obs', 'f', 'h', 'p', 'n', 'doc', 't'];
+const NOM_CAMPO = { r: 'Resultado', e: 'Estado', adm: 'Admisiones', obs: 'Observaciones', f: 'Fecha', h: 'Hora', p: 'Poligrafista', n: 'Evaluado', doc: 'Documento', t: 'Tipo' };
 const CAMPOS_AGENDA = ['id', 'f', 'h', 'n', 'doc', 'cargo', 't', 'p', 'ciudad', 'of', 'oficina', 'l', 'lm', 'e', 'app', 'u'];
 app.get('/api/pruebas', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
@@ -1238,16 +1240,34 @@ app.get('/api/pruebas', async (req, res) => {
 app.post('/api/pruebas/guardar', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
   const lista = (Array.isArray(req.body?.pruebas) ? req.body.pruebas : []).slice(0, 200);
-  let ok = 0;
+  let ok = 0; const rechazadas = [];
   for (const x of lista) {
     const cid = Number(x && x.id); if (!Number.isSafeInteger(cid) || cid <= 0) continue;
     const p = String(x.p || ''), f = /^\d{4}-\d{2}-\d{2}$/.test(x.f || '') ? x.f : null;
-    const prev = (await pool.query('SELECT poligrafista, creado_por, tipo, estado, fecha::text AS f, hora::text AS h, evaluado FROM pruebas WHERE cid = $1', [cid])).rows[0];
+    const prev = (await pool.query('SELECT poligrafista, creado_por, tipo, estado, fecha::text AS f, hora::text AS h, evaluado, datos FROM pruebas WHERE cid = $1', [cid])).rows[0];
     const puede = ['admin', 'analista'].includes(u.rol) || (/^P\d+$/.test(u.rol) && p === u.rol && (!prev || prev.poligrafista === u.rol))
       || (u.rol === 'th' && (!prev || prev.tipo === 'Preempleo'));
     if (!puede) continue;
     const d = {};
-    for (const [k, v] of Object.entries(x)) if (JSON.stringify(v).length < 4000) d[k] = v;
+    for (const [k, v] of Object.entries(x)) if (k !== 'corr' && k !== 'hist' && JSON.stringify(v).length < 4000) d[k] = v;
+    // Integridad: una prueba realizada queda bloqueada; solo el administrador la corrige, con motivo, y queda historial
+    const pd = (prev && prev.datos) || {};
+    if (pd.hist) d.hist = pd.hist;
+    if (prev && prev.estado === 'Realizada') {
+      const val = v => v === undefined || v === null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+      const cambios = CAMPOS_BLOQ.filter(k => val(x[k]) !== val(pd[k]));
+      if (cambios.length) {
+        const motivo = String((x.corr && x.corr.motivo) || '').trim().slice(0, 300);
+        if (u.rol !== 'admin' || motivo.length < 10) {
+          rechazadas.push(cid);
+          bitacora(req, u, 'Intento de modificar prueba cerrada', [pd.t, pd.n, pd.f, cambios.join(', ')].filter(Boolean).join(' · '), 'fallido');
+          continue;
+        }
+        const det = cambios.map(k => ({ campo: NOM_CAMPO[k] || k, antes: val(pd[k]).slice(0, 300), despues: val(x[k]).slice(0, 300) }));
+        d.hist = (Array.isArray(pd.hist) ? pd.hist : []).concat({ at: new Date().toISOString(), por: u.nombre, usuario: u.usuario, motivo, cambios: det }).slice(-30);
+        bitacora(req, u, 'Corrigió prueba cerrada', [pd.t, pd.n, pd.f].filter(Boolean).join(' · ') + ' · ' + det.map(c => c.campo + ': «' + c.antes.slice(0, 40) + '» → «' + c.despues.slice(0, 40) + '»').join('; ') + ' · Motivo: ' + motivo);
+      }
+    }
     d.app = 1; d.u = Date.now();
     await pool.query(
       `INSERT INTO pruebas (cid, fecha, hora, poligrafista, evaluado, cc, tipo, estado, datos, creado_por, actualizado)
@@ -1260,7 +1280,7 @@ app.post('/api/pruebas/guardar', async (req, res) => {
     else if (est && est !== prev.estado) bitacora(req, u, 'Cambió estado de prueba a «' + est + '»', det);
     else if (f !== prev.f || hh !== String(prev.h || '').slice(0, 5) || p !== prev.poligrafista) bitacora(req, u, 'Reprogramó prueba', det);
   }
-  res.json({ ok: true, guardadas: ok });
+  res.json({ ok: true, guardadas: ok, rechazadas });
 });
 
 app.get('/api/bitacora', async (req, res) => {
