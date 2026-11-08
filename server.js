@@ -1220,6 +1220,7 @@ app.post('/api/drive/subir', async (req, res) => {
 });
 
 // ===== Pruebas agendadas desde la app (compartidas entre todos los usuarios) =====
+const CAMPOS_AGENDA = ['id', 'f', 'h', 'n', 'doc', 'cargo', 't', 'p', 'ciudad', 'of', 'oficina', 'l', 'lm', 'e', 'app', 'u'];
 app.get('/api/pruebas', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
   const base = 'SELECT datos FROM pruebas WHERE cid IS NOT NULL';
@@ -1229,7 +1230,10 @@ app.get('/api/pruebas', async (req, res) => {
   else if (u.rol === 'th') r = await pool.query(base + " AND (tipo = 'Preempleo' OR creado_por = $1) ORDER BY fecha", [u.usuario]);
   else if (u.rol === 'lider') r = await pool.query(base + " AND (datos->>'lm') ILIKE $1 ORDER BY fecha", ['%' + u.usuario + '%']);
   else return res.json({ ok: true, pruebas: [] });
-  res.json({ ok: true, pruebas: r.rows.map(x => x.datos) });
+  // Mínimo acceso: el líder solo ve la agenda (sin resultado, admisiones, observaciones ni informes);
+  // Talento Humano solo ve resultados de preempleo.
+  const sinResultado = d => { const o = {}; for (const k of CAMPOS_AGENDA) if (d[k] !== undefined) o[k] = d[k]; o.r = ''; o.adm = ''; o.obs = ''; if (o.e && !['Programada', 'En curso', 'Realizada', 'Reprogramar', 'Ausente', 'Suspendida'].includes(o.e)) delete o.e; return o; };
+  res.json({ ok: true, pruebas: r.rows.map(x => u.rol === 'lider' || (u.rol === 'th' && x.datos.t !== 'Preempleo') ? sinResultado(x.datos) : x.datos) });
 });
 app.post('/api/pruebas/guardar', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
@@ -1240,7 +1244,7 @@ app.post('/api/pruebas/guardar', async (req, res) => {
     const p = String(x.p || ''), f = /^\d{4}-\d{2}-\d{2}$/.test(x.f || '') ? x.f : null;
     const prev = (await pool.query('SELECT poligrafista, creado_por, tipo, estado, fecha::text AS f, hora::text AS h, evaluado FROM pruebas WHERE cid = $1', [cid])).rows[0];
     const puede = ['admin', 'analista'].includes(u.rol) || (/^P\d+$/.test(u.rol) && p === u.rol && (!prev || prev.poligrafista === u.rol))
-      || (u.rol === 'th' && (!prev || prev.creado_por === u.usuario || prev.tipo === 'Preempleo'));
+      || (u.rol === 'th' && (!prev || prev.tipo === 'Preempleo'));
     if (!puede) continue;
     const d = {};
     for (const [k, v] of Object.entries(x)) if (JSON.stringify(v).length < 4000) d[k] = v;
