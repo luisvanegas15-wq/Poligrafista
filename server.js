@@ -1263,8 +1263,8 @@ app.get('/api/bitacora', async (req, res) => {
   const u = await soloAdmin(req, res); if (!u) return;
   if (Array.isArray(u.permisos) && !u.permisos.includes('bit') && !u.permisos.includes('usr')) return res.status(403).json({ ok: false, error: 'No tienes acceso a la bitácora.' });
   const q = req.query, w = [], v = [];
-  if (/^\d{4}-\d{2}-\d{2}$/.test(q.desde || '')) { v.push(q.desde); w.push(`fecha >= ($${v.length}::date AT TIME ZONE 'America/Bogota')`); }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(q.hasta || '')) { v.push(q.hasta); w.push(`fecha < (($${v.length}::date + 1) AT TIME ZONE 'America/Bogota')`); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(q.desde || '')) { v.push(q.desde); w.push(`fecha >= ($${v.length}::date::timestamp AT TIME ZONE 'America/Bogota')`); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(q.hasta || '')) { v.push(q.hasta); w.push(`fecha < (($${v.length}::date + 1)::timestamp AT TIME ZONE 'America/Bogota')`); }
   if (q.usuario) { v.push(String(q.usuario).toLowerCase()); w.push(`lower(usuario) = $${v.length}`); }
   if (q.tipo === 'ingresos') w.push("(accion ILIKE 'ingreso%' OR accion ILIKE '%ingreso%' OR accion ILIKE 'cerró sesión' OR accion ILIKE 'cuenta bloqueada%')");
   if (q.tipo === 'fallidos') w.push("resultado = 'fallido'");
