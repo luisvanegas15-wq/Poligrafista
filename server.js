@@ -74,6 +74,19 @@ ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS color TEXT;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'activo';
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sin_claves BOOLEAN DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS bitacora (
+  id BIGSERIAL PRIMARY KEY,
+  fecha TIMESTAMPTZ DEFAULT now(),
+  usuario TEXT,
+  nombre TEXT,
+  rol TEXT,
+  accion TEXT NOT NULL,
+  detalle TEXT,
+  resultado TEXT DEFAULT 'ok',
+  ip TEXT,
+  agente TEXT
+);
+CREATE INDEX IF NOT EXISTS bitacora_fecha ON bitacora (fecha DESC);
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS intentos INTEGER DEFAULT 0;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS bloqueado_hasta TIMESTAMPTZ;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ultimo_ingreso TIMESTAMPTZ;
@@ -191,6 +204,7 @@ async function initDB() {
       await pool.query('UPDATE usuarios SET nombre = $1 WHERE usuario = $2 AND nombre = $3', [real, 'poligrafista' + n + '@suitepoligrafia.example', 'Poligrafista ' + n]);
     }
     await pool.query('DELETE FROM sesiones WHERE expira < now()');
+    await pool.query("DELETE FROM bitacora WHERE fecha < now() - interval '2 years'");
     await pool.query("DELETE FROM en_vivo WHERE actualizado < now() - interval '24 hours'");
     console.log('Base de datos lista.');
   }
@@ -209,6 +223,65 @@ app.get('/api/salud', async (req, res) => {
 
 // ===== Autenticación =====
 app.use((req, res, next) => ['/api/planta', '/api/resultados/importar', '/api/drive/subir'].includes(req.path) ? next() : express.json({ limit: '1mb' })(req, res, next));
+
+// ===== Bitácora de actividades (quién ingresó y qué hizo) =====
+function bitacora(req, u, accion, detalle, resultado) {
+  if (!pool) return;
+  pool.query('INSERT INTO bitacora (usuario, nombre, rol, accion, detalle, resultado, ip, agente) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+    [u ? u.usuario : null, u ? u.nombre : null, u ? u.rol : null, String(accion).slice(0, 120), detalle ? String(detalle).slice(0, 400) : null,
+     resultado || 'ok', req.ip || null, String(req.headers['user-agent'] || '').slice(0, 200)]).catch(e => console.error('bitacora:', e.message));
+}
+const quien = async id => { const r = pool ? (await pool.query('SELECT usuario, nombre FROM usuarios WHERE id = $1', [+id]).catch(() => ({ rows: [] }))).rows[0] : null; return r ? r.nombre + ' (' + r.usuario + ')' : '#' + id; };
+// [método, ruta, acción, detalle(req)] — las rutas no listadas aquí registran desde su propio código o no se registran (consultas)
+const REGLAS_BIT = [
+  ['POST', /^\/api\/login$/, 'Ingreso con contraseña', r => r.body?.u],
+  ['POST', /^\/api\/codigo\/enviar$/, 'Pidió código de ingreso al correo', r => r.body?.u],
+  ['POST', /^\/api\/codigo\/verificar$/, 'Ingreso con código al correo', r => r.body?.u],
+  ['POST', /^\/api\/logout$/, 'Cerró sesión'],
+  ['POST', /^\/api\/clave$/, 'Cambió su contraseña'],
+  ['POST', /^\/api\/usuarios$/, 'Creó usuario', r => [r.body?.nombre, r.body?.correo, r.body?.rol].filter(Boolean).join(' · ')],
+  ['PUT', /^\/api\/usuarios\/(\d+)$/, r => r.body?.aprobar ? 'Aprobó solicitud de cuenta' : r.body?.activo === false ? 'Desactivó/editó usuario' : 'Editó usuario', r => r._obj],
+  ['POST', /^\/api\/usuarios\/(\d+)\/clave$/, 'Restableció contraseña', r => r._obj],
+  ['POST', /^\/api\/usuarios\/(\d+)\/desbloquear$/, 'Desbloqueó usuario', r => r._obj],
+  ['DELETE', /^\/api\/usuarios\/(\d+)$/, 'Rechazó solicitud de cuenta', r => r._obj],
+  ['POST', /^\/api\/registro$/, 'Solicitud de registro', r => [r.body?.nombre, r.body?.correo || r.body?.u].filter(Boolean).join(' · ')],
+  ['POST', /^\/api\/ayuda-acceso$/, 'Reportó problema de acceso', r => r.body?.correo || r.body?.u],
+  ['POST', /^\/api\/mensajes$/, 'Envió mensaje interno', r => 'para ' + (r.body?.para || '')],
+  ['POST', /^\/api\/ayuda$/, 'Pidió ayuda al administrador'],
+  ['POST', /^\/api\/permisos$/, 'Solicitó permiso o ausencia', r => [r.body?.tipo, r.body?.desde, r.body?.hasta].filter(Boolean).join(' · ')],
+  ['POST', /^\/api\/permisos\/(\d+)\/resolver$/, r => r.body?.estado === 'aprobado' ? 'Aprobó permiso' : 'Rechazó permiso', r => 'solicitud #' + r._id],
+  ['POST', /^\/api\/permisos\/(\d+)\/cancelar$/, 'Canceló permiso', r => 'solicitud #' + r._id],
+  ['POST', /^\/api\/planta$/, 'Importó base de vencimientos', r => (Array.isArray(r.body?.filas) ? r.body.filas.length : 0) + ' registros'],
+  ['DELETE', /^\/api\/planta$/, 'Borró base de vencimientos'],
+  ['POST', /^\/api\/resultados\/importar$/, 'Importó base de resultados', r => [r.body?.poligrafista, (Array.isArray(r.body?.filas) ? r.body.filas.length : 0) + ' registros'].join(' · ')],
+  ['POST', /^\/api\/repositorios$/, 'Agregó carpeta de Drive', r => r.body?.nombre],
+  ['PUT', /^\/api\/repositorios\/(\d+)$/, 'Editó carpeta de Drive', r => r.body?.nombre],
+  ['DELETE', /^\/api\/repositorios\/(\d+)$/, 'Quitó carpeta de Drive', r => '#' + r._id],
+  ['POST', /^\/api\/google\/desvincular$/, 'Desconectó Google Drive'],
+  ['POST', /^\/api\/chat\/prueba$/, 'Envió prueba a Google Chat'],
+  ['POST', /^\/api\/drive\/nueva$/, 'Creó carpeta en Drive', r => r.body?.nombre],
+  ['POST', /^\/api\/drive\/subir$/, 'Subió archivo a Drive', r => r.query?.nombre]
+];
+app.use('/api', async (req, res, next) => {
+  if (req.method === 'GET') return next();
+  const full = '/api' + req.path, regla = REGLAS_BIT.find(([m, re]) => m === req.method && re.test(full));
+  if (!regla) return next();
+  const m = full.match(regla[1]); req._id = m && m[1];
+  if (req._id && /usuarios/.test(full)) req._obj = await quien(req._id);
+  if (full === '/api/logout') req._u = await usuarioDeSesion(req).catch(() => null);
+  res.on('finish', () => {
+    const st = res.statusCode, u = req._u || null;
+    let accion = typeof regla[2] === 'function' ? regla[2](req) : regla[2];
+    let det = ''; try { det = regla[3] ? regla[3](req) || '' : ''; } catch (e) {}
+    const esIngreso = /^\/api\/(login|codigo\/verificar)$/.test(full);
+    if (st >= 400) {
+      if (st === 401 && !esIngreso && !/\/clave$/.test(full)) return; // sesión vencida: no se registra
+      accion = esIngreso ? (st === 423 ? 'Cuenta bloqueada por intentos fallidos' : 'Intento de ingreso fallido') : 'Acción rechazada: ' + accion.charAt(0).toLowerCase() + accion.slice(1);
+    }
+    bitacora(req, u, accion, det, st >= 400 ? 'fallido' : 'ok');
+  });
+  next();
+});
 
 const COOKIE = 'poli_sid';
 const HORAS_SESION = 12;
@@ -285,7 +358,7 @@ app.post('/api/login', async (req, res) => {
     u.previo = previo;
     const token = crypto.randomBytes(32).toString('hex');
     await pool.query("INSERT INTO sesiones (token, usuario_id, expira) VALUES ($1, $2, now() + interval '" + HORAS_SESION + " hours')", [token, u.id]);
-    ponerCookie(res, token, HORAS_SESION * 3600);
+    ponerCookie(res, token, HORAS_SESION * 3600); req._u = u;
     res.json({ ok: true, user: publico(u), bienvenida: { previo: u.previo || null } });
   } catch (e) { console.error('login:', e.message); res.status(500).json({ ok: false, error: 'Error del servidor.' }); }
 });
@@ -341,7 +414,7 @@ app.post('/api/codigo/verificar', async (req, res) => {
     const token = crypto.randomBytes(32).toString('hex');
     await pool.query("INSERT INTO sesiones (token, usuario_id, expira, via) VALUES ($1, $2, now() + interval '" + HORAS_SESION + " hours', 'codigo')", [token, u.id]);
     ponerCookie(res, token, HORAS_SESION * 3600);
-    u.via_sesion = 'codigo';
+    u.via_sesion = 'codigo'; req._u = u;
     res.json({ ok: true, user: publico(u), bienvenida: { previo: previo || null } });
   } catch (e) { console.error('codigo verificar:', e.message); res.status(500).json({ ok: false, error: 'Error del servidor.' }); }
 });
@@ -407,6 +480,7 @@ async function conSesion(req, res) {
   if (!pool) { sinBD(res); return null; }
   const u = await usuarioDeSesion(req).catch(() => null);
   if (!u) { res.status(401).json({ ok: false, error: 'Sesión expirada.' }); return null; }
+  req._u = u;
   return u;
 }
 function puedeEscribir(u, poli) { return VE_TODO.includes(u.rol) || (esPoli(u.rol) && u.rol === poli); }
@@ -428,6 +502,7 @@ app.put('/api/vivo/:id', async (req, res) => {
   if (!puedeEscribir(u, poli)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
   const prev = await pool.query('SELECT poligrafista, datos FROM en_vivo WHERE id = $1', [id]);
   if (prev.rows[0] && !puedeEscribir(u, prev.rows[0].poligrafista)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
+  if (!prev.rows[0]) bitacora(req, u, 'Inició ' + (TIPO_VIVO[tipo] || tipo).toLowerCase(), [poli, datos.ciudad || datos.of || ''].filter(Boolean).join(' · '));
   const antes = prev.rows[0] && prev.rows[0].datos;
   if (!antes || (+antes.fase || 0) !== (+datos.fase || 0)) {
     const quien = await nombrePoli(poli), det = detalleVivo(tipo, datos), et = (datos.tl || []).slice(-1)[0];
@@ -448,6 +523,7 @@ app.delete('/api/vivo/:id', async (req, res) => {
   const prev = await pool.query('SELECT poligrafista, tipo, datos FROM en_vivo WHERE id = $1', [req.params.id]);
   if (prev.rows[0] && !puedeEscribir(u, prev.rows[0].poligrafista)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
   await pool.query('DELETE FROM en_vivo WHERE id = $1', [req.params.id]);
+  if (prev.rows[0]) bitacora(req, u, 'Finalizó ' + (TIPO_VIVO[prev.rows[0].tipo] || 'actividad').toLowerCase(), [prev.rows[0].poligrafista, req.query.estado || ''].filter(Boolean).join(' · '));
   if (prev.rows[0]) {
     const p = prev.rows[0], quien = await nombrePoli(p.poligrafista), det = detalleVivo(p.tipo, p.datos || {});
     const estado = String(req.query.estado || '').slice(0, 30), dur = durTxt((p.datos || {}).t0);
@@ -459,7 +535,7 @@ app.delete('/api/vivo/:id', async (req, res) => {
 
 // ===== Administración de usuarios (solo administrador) =====
 const ROLES_OK = ['admin', 'analista', 'poli', 'th', 'lider'];
-const VISTAS_OK = ['dash', 'cal', 'diaria', 'prog', 'res', 'resumen', 'venc', 'val', 'arq', 'cgm', 'form', 'usr', 'imp', 'clave', 'perm', 'repo'];
+const VISTAS_OK = ['dash', 'cal', 'diaria', 'prog', 'res', 'resumen', 'venc', 'val', 'arq', 'cgm', 'form', 'usr', 'imp', 'clave', 'perm', 'repo', 'bit'];
 const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function claveTemporal() {
   const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz', d = '23456789';
@@ -981,19 +1057,21 @@ app.get('/api/google/callback', async (req, res) => {
       if (!u) return fin('err', 'Tu sesión expiró. Ingresa de nuevo.');
     } else {
       u = (await pool.query('SELECT * FROM usuarios WHERE lower(usuario) = $1 OR lower(correo) = $1 ORDER BY (lower(usuario) = $1) DESC LIMIT 1', [correo])).rows[0];
-      if (!u) return fin('err', 'El correo ' + correo + ' no está registrado en la plataforma. Pide al administrador que lo agregue en Usuarios y roles.');
+      if (!u) { bitacora(req, null, 'Intento de ingreso con Google', correo + ' (no registrado)', 'fallido'); return fin('err', 'El correo ' + correo + ' no está registrado en la plataforma. Pide al administrador que lo agregue en Usuarios y roles.'); }
       if (u.estado === 'pendiente') return fin('err', 'Tu solicitud de cuenta está pendiente de aprobación.');
       if (!u.activo) return fin('err', 'Tu cuenta está desactivada. Contacta al administrador.');
       await pool.query('UPDATE usuarios SET intentos = 0, bloqueado_hasta = NULL, ultimo_ingreso = now() WHERE id = $1', [u.id]);
       const token = crypto.randomBytes(32).toString('hex');
       await pool.query("INSERT INTO sesiones (token, usuario_id, expira, via) VALUES ($1, $2, now() + interval '" + HORAS_SESION + " hours', 'google')", [token, u.id]);
       ponerCookie(res, token, HORAS_SESION * 3600);
+      bitacora(req, u, 'Ingreso con Google', correo);
     }
     const conDrive = String(j.scope || '').includes('/auth/drive');
     if (conDrive && j.refresh_token) {
       await pool.query('INSERT INTO google_tokens (usuario_id, correo, refresh) VALUES ($1,$2,$3) ON CONFLICT (usuario_id) DO UPDATE SET correo = EXCLUDED.correo, refresh = EXCLUDED.refresh, creado = now()', [u.id, correo, cifrar(j.refresh_token)]);
     }
     if (conDrive && j.access_token) gAcc.set(u.id, { t: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 });
+    if (modo === 'link' && conDrive) bitacora(req, u, 'Conectó Google Drive', correo);
     if (modo === 'link' && !conDrive) return fin('err', 'No se autorizó el acceso a Google Drive. Intenta de nuevo y marca la casilla de Drive.');
     fin(g);
   } catch (e) { console.error('google callback:', e.message); fin('err', 'No se pudo completar el ingreso con Google.'); }
@@ -1160,7 +1238,7 @@ app.post('/api/pruebas/guardar', async (req, res) => {
   for (const x of lista) {
     const cid = Number(x && x.id); if (!Number.isSafeInteger(cid) || cid <= 0) continue;
     const p = String(x.p || ''), f = /^\d{4}-\d{2}-\d{2}$/.test(x.f || '') ? x.f : null;
-    const prev = (await pool.query('SELECT poligrafista, creado_por, tipo FROM pruebas WHERE cid = $1', [cid])).rows[0];
+    const prev = (await pool.query('SELECT poligrafista, creado_por, tipo, estado, fecha::text AS f, hora::text AS h, evaluado FROM pruebas WHERE cid = $1', [cid])).rows[0];
     const puede = ['admin', 'analista'].includes(u.rol) || (/^P\d+$/.test(u.rol) && p === u.rol && (!prev || prev.poligrafista === u.rol))
       || (u.rol === 'th' && (!prev || prev.creado_por === u.usuario || prev.tipo === 'Preempleo'));
     if (!puede) continue;
@@ -1173,8 +1251,27 @@ app.post('/api/pruebas/guardar', async (req, res) => {
        ON CONFLICT (cid) DO UPDATE SET fecha=$2, hora=$3, poligrafista=$4, evaluado=$5, cc=$6, tipo=$7, estado=$8, datos=$9, actualizado=now()`,
       [cid, f, /^\d{1,2}:\d{2}/.test(x.h || '') ? x.h : null, p, String(x.n || '').slice(0, 120), String(x.doc || '').slice(0, 30), String(x.t || '').slice(0, 40), String(x.e || '').slice(0, 30), d, u.usuario]);
     ok++;
+    const est = String(x.e || ''), hh = String(x.h || '').slice(0, 5), det = [x.t, x.n, f, hh, p].filter(Boolean).join(' · ');
+    if (!prev) bitacora(req, u, 'Agendó prueba', det);
+    else if (est && est !== prev.estado) bitacora(req, u, 'Cambió estado de prueba a «' + est + '»', det);
+    else if (f !== prev.f || hh !== String(prev.h || '').slice(0, 5) || p !== prev.poligrafista) bitacora(req, u, 'Reprogramó prueba', det);
   }
   res.json({ ok: true, guardadas: ok });
+});
+
+app.get('/api/bitacora', async (req, res) => {
+  const u = await soloAdmin(req, res); if (!u) return;
+  if (Array.isArray(u.permisos) && !u.permisos.includes('bit') && !u.permisos.includes('usr')) return res.status(403).json({ ok: false, error: 'No tienes acceso a la bitácora.' });
+  const q = req.query, w = [], v = [];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(q.desde || '')) { v.push(q.desde); w.push(`fecha >= ($${v.length}::date AT TIME ZONE 'America/Bogota')`); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(q.hasta || '')) { v.push(q.hasta); w.push(`fecha < (($${v.length}::date + 1) AT TIME ZONE 'America/Bogota')`); }
+  if (q.usuario) { v.push(String(q.usuario).toLowerCase()); w.push(`lower(usuario) = $${v.length}`); }
+  if (q.tipo === 'ingresos') w.push("(accion ILIKE 'ingreso%' OR accion ILIKE '%ingreso%' OR accion ILIKE 'cerró sesión' OR accion ILIKE 'cuenta bloqueada%')");
+  if (q.tipo === 'fallidos') w.push("resultado = 'fallido'");
+  if (q.texto) { v.push('%' + String(q.texto).slice(0, 60) + '%'); w.push(`(accion ILIKE $${v.length} OR detalle ILIKE $${v.length} OR nombre ILIKE $${v.length} OR usuario ILIKE $${v.length})`); }
+  const lim = Math.min(Math.max(+q.limite || 300, 1), 5000);
+  const r = await pool.query(`SELECT id, fecha, usuario, nombre, rol, accion, detalle, resultado, ip, agente FROM bitacora ${w.length ? 'WHERE ' + w.join(' AND ') : ''} ORDER BY fecha DESC LIMIT ${lim}`, v);
+  res.json({ ok: true, filas: r.rows });
 });
 
 app.use(express.static(__dirname, { index: 'index.html', extensions: ['html'] }));
