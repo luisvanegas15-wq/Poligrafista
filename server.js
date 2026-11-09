@@ -204,6 +204,7 @@ async function initDB() {
       await pool.query('UPDATE usuarios SET nombre = $1 WHERE usuario = $2 AND nombre = $3', [real, 'poligrafista' + n + '@suitepoligrafia.example', 'Poligrafista ' + n]);
     }
     await pool.query('DELETE FROM sesiones WHERE expira < now()');
+    if (!process.env.GOOGLE_CLIENT_ID) await pool.query('DELETE FROM google_tokens').catch(() => {}); // Google desvinculado: no se conservan tokens
     await pool.query("DELETE FROM bitacora WHERE fecha < now() - interval '2 years'");
     await pool.query("DELETE FROM en_vivo WHERE actualizado < now() - interval '24 hours'");
     console.log('Base de datos lista.');
