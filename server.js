@@ -1282,6 +1282,17 @@ app.post('/api/pruebas/guardar', async (req, res) => {
     if (!prev) bitacora(req, u, 'Agendó prueba', det);
     else if (est && est !== prev.estado) bitacora(req, u, 'Cambió estado de prueba a «' + est + '»', det);
     else if (f !== prev.f || hh !== String(prev.h || '').slice(0, 5) || p !== prev.poligrafista) bitacora(req, u, 'Reprogramó prueba', det);
+    // Política de inasistencia: 2 o más ausencias del mismo funcionario en 12 meses → aviso al administrador y analista
+    if (est === 'Ausente' && (!prev || prev.estado !== 'Ausente') && String(x.doc || '').replace(/\D/g, '')) {
+      const cc = String(x.doc).replace(/\D/g, '');
+      const n = (await pool.query("SELECT count(*)::int AS n FROM pruebas WHERE estado = 'Ausente' AND regexp_replace(cc, '\\D', '', 'g') = $1 AND fecha >= current_date - 365", [cc]).catch(() => ({ rows: [{ n: 0 }] }))).rows[0].n;
+      if (n >= 2) {
+        const t = 'Inasistencia reiterada: ' + String(x.n || '').slice(0, 80);
+        const tx = 'C.C. ' + cc + ' no asistió a la prueba ' + n + ' veces en los últimos 12 meses' + (x.l ? '. Líder: ' + String(x.l).slice(0, 80) : '') + '. Según la política, escala con su líder y la jefatura.';
+        for (const r of ['rol:admin', 'rol:analista']) await avisar(r, 'alerta', t, tx, u.usuario, { cc }).catch(() => {});
+        bitacora(req, u, 'Alerta de inasistencia reiterada', 'C.C. ' + cc + ' · ' + n + ' ausencias');
+      }
+    }
   }
   res.json({ ok: true, guardadas: ok, rechazadas });
 });
@@ -1304,4 +1315,6 @@ app.get('/api/bitacora', async (req, res) => {
 app.use(express.static(__dirname, { index: 'index.html', extensions: ['html'] }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
+// Red de seguridad: un error inesperado en una petición no debe tumbar el servidor
+process.on('unhandledRejection', e => console.error('Error no controlado:', e && e.message ? e.message : e));
 initDB().finally(() => app.listen(PORT, () => console.log('Servidor en puerto ' + PORT)));
