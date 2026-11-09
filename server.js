@@ -96,12 +96,7 @@ ALTER TABLE pruebas ADD COLUMN IF NOT EXISTS creado_por TEXT;
 ALTER TABLE pruebas ALTER COLUMN fecha DROP NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS pruebas_cid_idx ON pruebas (cid);
 CREATE INDEX IF NOT EXISTS resultados_poli_idx ON resultados (poligrafista, origen);
-CREATE TABLE IF NOT EXISTS google_tokens (
-  usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
-  correo TEXT,
-  refresh TEXT NOT NULL,
-  creado TIMESTAMPTZ DEFAULT now()
-);
+DROP TABLE IF EXISTS google_tokens;
 ALTER TABLE sesiones ADD COLUMN IF NOT EXISTS via TEXT;
 CREATE TABLE IF NOT EXISTS codigos (
   usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
@@ -204,7 +199,6 @@ async function initDB() {
       await pool.query('UPDATE usuarios SET nombre = $1 WHERE usuario = $2 AND nombre = $3', [real, 'poligrafista' + n + '@suitepoligrafia.example', 'Poligrafista ' + n]);
     }
     await pool.query('DELETE FROM sesiones WHERE expira < now()');
-    if (!process.env.GOOGLE_CLIENT_ID) await pool.query('DELETE FROM google_tokens').catch(() => {}); // Google desvinculado: no se conservan tokens
     await pool.query("DELETE FROM bitacora WHERE fecha < now() - interval '2 years'");
     await pool.query("DELETE FROM en_vivo WHERE actualizado < now() - interval '24 hours'");
     console.log('Base de datos lista.');
@@ -223,7 +217,7 @@ app.get('/api/salud', async (req, res) => {
 });
 
 // ===== Autenticación =====
-app.use((req, res, next) => ['/api/planta', '/api/resultados/importar', '/api/drive/subir'].includes(req.path) ? next() : express.json({ limit: '1mb' })(req, res, next));
+app.use((req, res, next) => ['/api/planta', '/api/resultados/importar'].includes(req.path) ? next() : express.json({ limit: '1mb' })(req, res, next));
 
 // ===== Bitácora de actividades (quién ingresó y qué hizo) =====
 function bitacora(req, u, accion, detalle, resultado) {
@@ -257,11 +251,7 @@ const REGLAS_BIT = [
   ['POST', /^\/api\/resultados\/importar$/, 'Importó base de resultados', r => [r.body?.poligrafista, (Array.isArray(r.body?.filas) ? r.body.filas.length : 0) + ' registros'].join(' · ')],
   ['POST', /^\/api\/repositorios$/, 'Agregó carpeta de Drive', r => r.body?.nombre],
   ['PUT', /^\/api\/repositorios\/(\d+)$/, 'Editó carpeta de Drive', r => r.body?.nombre],
-  ['DELETE', /^\/api\/repositorios\/(\d+)$/, 'Quitó carpeta de Drive', r => '#' + r._id],
-  ['POST', /^\/api\/google\/desvincular$/, 'Desconectó Google Drive'],
-  ['POST', /^\/api\/chat\/prueba$/, 'Envió prueba a Google Chat'],
-  ['POST', /^\/api\/drive\/nueva$/, 'Creó carpeta en Drive', r => r.body?.nombre],
-  ['POST', /^\/api\/drive\/subir$/, 'Subió archivo a Drive', r => r.query?.nombre]
+  ['DELETE', /^\/api\/repositorios\/(\d+)$/, 'Quitó carpeta de Drive', r => '#' + r._id]
 ];
 app.use('/api', async (req, res, next) => {
   if (req.method === 'GET') return next();
@@ -368,7 +358,8 @@ app.post('/api/login', async (req, res) => {
 // Variables en Railway: BREVO_API_KEY y BREVO_SENDER (correo remitente verificado en Brevo).
 const BREVO_KEY = process.env.BREVO_API_KEY || '', BREVO_FROM = process.env.BREVO_SENDER || '';
 const BREVO_URL = process.env.BREVO_API_URL || 'https://api.brevo.com/v3/smtp/email';
-const hashCodigo = (id, c) => crypto.createHash('sha256').update(id + ':' + c + ':' + (process.env.GOOGLE_CLIENT_SECRET || 'poli')).digest('hex');
+const PIMIENTA = process.env.CODIGO_SECRETO || crypto.randomBytes(24).toString('hex');
+const hashCodigo = (id, c) => crypto.createHash('sha256').update(id + ':' + c + ':' + PIMIENTA).digest('hex');
 async function enviarCorreo(para, asunto, html) {
   const r = await fetch(BREVO_URL, { method: 'POST', headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({ sender: { name: 'Seguridad y Riesgos · Polígrafías', email: BREVO_FROM }, to: [{ email: para }], subject: asunto, htmlContent: html }) });
@@ -456,24 +447,7 @@ app.post('/api/clave', async (req, res) => {
   } catch (e) { console.error('clave:', e.message); res.status(500).json({ ok: false, error: 'Error del servidor.' }); }
 });
 
-// ===== Avisos a Google Chat (webhook en la variable GOOGLE_CHAT_WEBHOOK) =====
-const CHAT_URL = process.env.GOOGLE_CHAT_WEBHOOK || '';
 const TIPO_VIVO = { poli: 'Poligrafía', val: 'Validación de cuentas', arq: 'Arqueo', cgm: 'Apoyo CGM' };
-async function chatAviso(texto) {
-  if (!CHAT_URL) return;
-  try {
-    const r = await fetch(CHAT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json; charset=UTF-8' }, body: JSON.stringify({ text: texto }) });
-    if (!r.ok) console.error('chat:', r.status, (await r.text()).slice(0, 150));
-  } catch (e) { console.error('chat:', e.message); }
-}
-async function nombrePoli(rol) { const r = await pool.query('SELECT nombre FROM usuarios WHERE rol = $1 LIMIT 1', [rol]); return (r.rows[0] && r.rows[0].nombre) || rol; }
-function detalleVivo(tipo, d) {
-  if (tipo === 'poli') return (d.t ? d.t.toLowerCase() : 'prueba') + (d.ciudad ? ' en ' + d.ciudad : '');
-  return d.o ? d.o : '';
-}
-const hora = () => new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Bogota' });
-const durTxt = t0 => { if (!t0) return ''; const m = Math.max(0, Math.round((Date.now() - +t0) / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; };
-
 // ===== Seguimiento en vivo compartido =====
 const VE_TODO = ['admin', 'analista'];
 const esPoli = rol => /^P\d+$/.test(rol || '');
@@ -506,13 +480,6 @@ app.put('/api/vivo/:id', async (req, res) => {
   const prev = await pool.query('SELECT poligrafista, datos FROM en_vivo WHERE id = $1', [id]);
   if (prev.rows[0] && !puedeEscribir(u, prev.rows[0].poligrafista)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
   if (!prev.rows[0]) bitacora(req, u, 'Inició ' + (TIPO_VIVO[tipo] || tipo).toLowerCase(), [poli, datos.ciudad || datos.of || ''].filter(Boolean).join(' · '));
-  const antes = prev.rows[0] && prev.rows[0].datos;
-  if (!antes || (+antes.fase || 0) !== (+datos.fase || 0)) {
-    const quien = await nombrePoli(poli), det = detalleVivo(tipo, datos), et = (datos.tl || []).slice(-1)[0];
-    chatAviso(!antes
-      ? '▶️ *' + quien + '* inició ' + TIPO_VIVO[tipo].toLowerCase() + (det ? ' · ' + det : '') + ' — ' + hora()
-      : '⏩ *' + quien + '* · ' + TIPO_VIVO[tipo] + (det ? ' (' + det + ')' : '') + ': etapa «' + ((et && et.k) || 'siguiente') + '» — ' + hora());
-  }
   await pool.query(
     `INSERT INTO en_vivo (id, tipo, poligrafista, datos, actualizado) VALUES ($1,$2,$3,$4,now())
      ON CONFLICT (id) DO UPDATE SET tipo = EXCLUDED.tipo, poligrafista = EXCLUDED.poligrafista, datos = EXCLUDED.datos, actualizado = now()`,
@@ -527,12 +494,6 @@ app.delete('/api/vivo/:id', async (req, res) => {
   if (prev.rows[0] && !puedeEscribir(u, prev.rows[0].poligrafista)) return res.status(403).json({ ok: false, error: 'Sin permiso.' });
   await pool.query('DELETE FROM en_vivo WHERE id = $1', [req.params.id]);
   if (prev.rows[0]) bitacora(req, u, 'Finalizó ' + (TIPO_VIVO[prev.rows[0].tipo] || 'actividad').toLowerCase(), [prev.rows[0].poligrafista, req.query.estado || ''].filter(Boolean).join(' · '));
-  if (prev.rows[0]) {
-    const p = prev.rows[0], quien = await nombrePoli(p.poligrafista), det = detalleVivo(p.tipo, p.datos || {});
-    const estado = String(req.query.estado || '').slice(0, 30), dur = durTxt((p.datos || {}).t0);
-    const cierre = { Reprogramar: 'reprogramó', Ausente: 'registró ausencia en', Suspendida: 'suspendió' }[estado];
-    chatAviso((cierre ? '⚠️ *' + quien + '* ' + cierre + ' ' : '✅ *' + quien + '* finalizó ') + TIPO_VIVO[p.tipo].toLowerCase() + (det ? ' · ' + det : '') + (dur ? ' · duración ' + dur : '') + ' — ' + hora());
-  }
   res.json({ ok: true });
 });
 
@@ -559,13 +520,13 @@ async function soloAdmin(req, res) {
   if (u.rol !== 'admin') { res.status(403).json({ ok: false, error: 'Solo el administrador puede hacer esto.' }); return null; }
   return u;
 }
-// Correo corporativo de Google (opcional): permite «Ingresar con Google» cuando difiere del usuario
+// Correo corporativo alterno (opcional): permite ingresar con código cuando difiere del usuario
 async function gCorreoValido(v, id) {
   const c = String(v || '').trim().toLowerCase().slice(0, 120);
   if (!c) return { v: null };
-  if (!CORREO_RE.test(c)) return { error: 'El correo de Google no es válido.' };
+  if (!CORREO_RE.test(c)) return { error: 'El correo corporativo no es válido.' };
   const r = await pool.query('SELECT 1 FROM usuarios WHERE id <> $2 AND (lower(usuario) = $1 OR lower(correo) = $1)', [c, id || 0]);
-  if (r.rows.length) return { error: 'Ese correo de Google ya está asignado a otro usuario.' };
+  if (r.rows.length) return { error: 'Ese correo corporativo ya está asignado a otro usuario.' };
   return { v: c };
 }
 const filaUsuario = r => ({ id: r.id, sin_claves: !!r.sin_claves, estado: r.estado || 'activo', bloqueado: !!(r.bloqueado_hasta && new Date(r.bloqueado_hasta) > new Date()), ultimo: r.ultimo_ingreso, usuario: r.usuario, gcorreo: r.correo && r.correo !== r.usuario ? r.correo : '', nombre: r.nombre, rol: r.rol, zona: r.zona, telefono: r.telefono, color: r.color,
@@ -988,260 +949,11 @@ app.delete('/api/repositorios/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
-// ===== Subida directa a Google Drive (cuenta de servicio, unidad compartida) =====
-// Variable en Railway: GOOGLE_SERVICE_ACCOUNT_JSON = contenido completo del archivo JSON de la cuenta de servicio.
-const DRIVE = process.env.DRIVE_API_BASE || 'https://www.googleapis.com';
-const TOKEN_URL = process.env.DRIVE_TOKEN_URL || 'https://oauth2.googleapis.com/token';
-let SA = null;
-try { if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) SA = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON); } catch (e) { console.error('GOOGLE_SERVICE_ACCOUNT_JSON no es un JSON válido'); }
-let tokenCache = { t: null, exp: 0 };
-const b64u = b => Buffer.from(b).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-async function gToken() {
-  if (!SA) throw new Error('Drive no está conectado');
-  if (tokenCache.t && Date.now() < tokenCache.exp - 60000) return tokenCache.t;
-  const now = Math.floor(Date.now() / 1000);
-  const head = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const body = b64u(JSON.stringify({ iss: SA.client_email, scope: 'https://www.googleapis.com/auth/drive', aud: TOKEN_URL, iat: now, exp: now + 3600 }));
-  const sig = crypto.createSign('RSA-SHA256').update(head + '.' + body).sign(SA.private_key).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-  const r = await fetch(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=' + encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer') + '&assertion=' + head + '.' + body + '.' + sig });
-  const j = await r.json(); if (!j.access_token) throw new Error('No se pudo autenticar con Google');
-  tokenCache = { t: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 }; return j.access_token;
-}
-// ===== Ingreso con Google (OAuth) y Drive con la cuenta de cada usuario =====
-// Variables en Railway: GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET (cliente web de Google Cloud).
-const { AsyncLocalStorage } = require('async_hooks');
-const ctxG = new AsyncLocalStorage();
-const G_ID = process.env.GOOGLE_CLIENT_ID || '', G_SEC = process.env.GOOGLE_CLIENT_SECRET || '';
-const AUTH_URL = process.env.GOOGLE_AUTH_URL || 'https://accounts.google.com/o/oauth2/v2/auth';
-const G_SCOPE = 'openid email profile https://www.googleapis.com/auth/drive';
-const gKey = () => crypto.createHash('sha256').update('poli-oauth:' + G_SEC).digest();
-function cifrar(t) {
-  const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', gKey(), iv);
-  const d = Buffer.concat([c.update(t, 'utf8'), c.final()]);
-  return [iv, c.getAuthTag(), d].map(b => b.toString('base64')).join('.');
-}
-function descifrar(s) {
-  const [iv, tag, d] = String(s).split('.').map(x => Buffer.from(x, 'base64'));
-  const c = crypto.createDecipheriv('aes-256-gcm', gKey(), iv); c.setAuthTag(tag);
-  return Buffer.concat([c.update(d), c.final()]).toString('utf8');
-}
-const redirG = req => process.env.GOOGLE_REDIRECT_URI || (req.protocol + '://' + req.get('host') + '/api/google/callback');
-const gAcc = new Map(); // usuario_id -> { t, exp }
-async function tokenUsuario(u) {
-  if (!G_ID || !pool) return null;
-  const c = gAcc.get(u.id); if (c && Date.now() < c.exp - 60000) return c.t;
-  const row = (await pool.query('SELECT refresh FROM google_tokens WHERE usuario_id = $1', [u.id])).rows[0];
-  if (!row) return null;
-  let rt; try { rt = descifrar(row.refresh); } catch (e) { return null; }
-  const r = await fetch(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: G_ID, client_secret: G_SEC, refresh_token: rt, grant_type: 'refresh_token' }) });
-  const j = await r.json().catch(() => ({}));
-  if (!j.access_token) { if (j.error === 'invalid_grant') await pool.query('DELETE FROM google_tokens WHERE usuario_id = $1', [u.id]); return null; }
-  gAcc.set(u.id, { t: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 });
-  return j.access_token;
-}
-// Prepara el acceso a Drive de la petición: con OAuth activo se usa SIEMPRE la cuenta del usuario
-// (el llamador hace ctxG.enterWith con lo devuelto, para que aplique al resto de la petición)
-async function prepDrive(u, res) {
-  const t = await tokenUsuario(u).catch(() => null);
-  if (G_ID && !t) { res.status(400).json({ ok: false, conectar: true, error: 'Conecta tu Google Drive (botón «Conectar mi Google Drive») para usar las carpetas.' }); return null; }
-  return { t, uid: u.id };
-}
-async function driveToken() { const st = ctxG.getStore(); return (st && st.t) || gToken(); }
-
-app.get('/api/google/login', (req, res) => {
-  if (!G_ID || !G_SEC) return res.redirect('/?g=err&m=' + encodeURIComponent('El ingreso con Google aún no está configurado.'));
-  const st = crypto.randomBytes(16).toString('hex'), modo = req.query.link ? 'link' : 'login';
-  const seguro = process.env.NODE_ENV === 'development' ? '' : '; Secure';
-  res.append('Set-Cookie', `poli_gst=${st}.${modo}; HttpOnly; Path=/api/google; SameSite=Lax; Max-Age=600${seguro}`);
-  const q = new URLSearchParams({ client_id: G_ID, redirect_uri: redirG(req), response_type: 'code', scope: G_SCOPE,
-    access_type: 'offline', include_granted_scopes: 'true', state: st, prompt: modo === 'link' ? 'consent' : 'select_account' });
-  if (req.query.hint) q.set('login_hint', String(req.query.hint).slice(0, 120));
-  res.redirect(AUTH_URL + '?' + q.toString());
-});
-app.get('/api/google/callback', async (req, res) => {
-  const fin = (g, m) => { res.append('Set-Cookie', 'poli_gst=; Path=/api/google; Max-Age=0'); res.redirect('/?g=' + g + (m ? '&m=' + encodeURIComponent(m) : '')); };
-  try {
-    if (!pool || !G_ID) return fin('err', 'El ingreso con Google no está disponible.');
-    const [st, modo] = String(leerCookie(req, 'poli_gst') || '').split('.');
-    if (req.query.error) return fin('err', 'Se canceló el ingreso con Google.');
-    if (!st || st !== String(req.query.state || '')) return fin('err', 'La solicitud expiró. Intenta de nuevo.');
-    const r = await fetch(TOKEN_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ code: String(req.query.code || ''), client_id: G_ID, client_secret: G_SEC, redirect_uri: redirG(req), grant_type: 'authorization_code' }) });
-    const j = await r.json().catch(() => ({}));
-    if (!j.id_token) { console.error('google token:', j.error || r.status); return fin('err', 'Google no confirmó tu cuenta. Intenta de nuevo.'); }
-    // El id_token llega directo de Google por HTTPS: se valida destinatario, vigencia y correo verificado
-    const info = JSON.parse(Buffer.from(j.id_token.split('.')[1], 'base64url').toString());
-    const correo = String(info.email || '').toLowerCase();
-    if (info.aud !== G_ID || !correo || info.email_verified === false || (info.exp && info.exp * 1000 < Date.now())) return fin('err', 'No se pudo verificar tu cuenta de Google.');
-    let u, g = 'ok';
-    if (modo === 'link') {
-      u = await usuarioDeSesion(req); g = 'drive';
-      if (!u) return fin('err', 'Tu sesión expiró. Ingresa de nuevo.');
-    } else {
-      u = (await pool.query('SELECT * FROM usuarios WHERE lower(usuario) = $1 OR lower(correo) = $1 ORDER BY (lower(usuario) = $1) DESC LIMIT 1', [correo])).rows[0];
-      if (!u) { bitacora(req, null, 'Intento de ingreso con Google', correo + ' (no registrado)', 'fallido'); return fin('err', 'El correo ' + correo + ' no está registrado en la plataforma. Pide al administrador que lo agregue en Usuarios y roles.'); }
-      if (u.estado === 'pendiente') return fin('err', 'Tu solicitud de cuenta está pendiente de aprobación.');
-      if (!u.activo) return fin('err', 'Tu cuenta está desactivada. Contacta al administrador.');
-      await pool.query('UPDATE usuarios SET intentos = 0, bloqueado_hasta = NULL, ultimo_ingreso = now() WHERE id = $1', [u.id]);
-      const token = crypto.randomBytes(32).toString('hex');
-      await pool.query("INSERT INTO sesiones (token, usuario_id, expira, via) VALUES ($1, $2, now() + interval '" + HORAS_SESION + " hours', 'google')", [token, u.id]);
-      ponerCookie(res, token, HORAS_SESION * 3600);
-      bitacora(req, u, 'Ingreso con Google', correo);
-    }
-    const conDrive = String(j.scope || '').includes('/auth/drive');
-    if (conDrive && j.refresh_token) {
-      await pool.query('INSERT INTO google_tokens (usuario_id, correo, refresh) VALUES ($1,$2,$3) ON CONFLICT (usuario_id) DO UPDATE SET correo = EXCLUDED.correo, refresh = EXCLUDED.refresh, creado = now()', [u.id, correo, cifrar(j.refresh_token)]);
-    }
-    if (conDrive && j.access_token) gAcc.set(u.id, { t: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 });
-    if (modo === 'link' && conDrive) bitacora(req, u, 'Conectó Google Drive', correo);
-    if (modo === 'link' && !conDrive) return fin('err', 'No se autorizó el acceso a Google Drive. Intenta de nuevo y marca la casilla de Drive.');
-    fin(g);
-  } catch (e) { console.error('google callback:', e.message); fin('err', 'No se pudo completar el ingreso con Google.'); }
-});
-app.post('/api/google/desvincular', async (req, res) => {
-  const u = await conSesion(req, res); if (!u) return;
-  await pool.query('DELETE FROM google_tokens WHERE usuario_id = $1', [u.id]); gAcc.delete(u.id);
-  res.json({ ok: true });
-});
-app.get('/api/google/estado', (req, res) => res.json({ ok: true, activo: !!(G_ID && G_SEC) }));
-
-async function gApi(path, opt = {}) {
-  const t = await driveToken();
-  const r = await fetch(DRIVE + path, { ...opt, headers: { Authorization: 'Bearer ' + t, ...(opt.headers || {}) } });
-  if (!r.ok) { const tx = await r.text(); const e = new Error('Drive ' + r.status + ': ' + tx.slice(0, 200)); e.status = r.status; throw e; }
-  return r.status === 204 ? {} : r.json();
-}
-const ALL = 'supportsAllDrives=true&includeItemsFromAllDrives=true';
-const FOLDER = 'application/vnd.google-apps.folder';
-const idDeUrl = u => { const m = String(u || '').match(/\/folders\/([A-Za-z0-9_-]{10,})/) || String(u || '').match(/[?&]id=([A-Za-z0-9_-]{10,})/); return m ? m[1] : null; };
-const qEsc = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-async function hijos(parent, soloCarpetas) {
-  const q = "'" + qEsc(parent) + "' in parents and trashed=false" + (soloCarpetas ? " and mimeType='" + FOLDER + "'" : '');
-  let out = [], pt = '';
-  do {
-    const j = await gApi('/drive/v3/files?' + ALL + '&corpora=allDrives&pageSize=200&orderBy=folder,name&fields=nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)&q=' + encodeURIComponent(q) + (pt ? '&pageToken=' + pt : ''));
-    out = out.concat(j.files || []); pt = j.nextPageToken || '';
-  } while (pt && out.length < 1000);
-  return out;
-}
-async function crearCarpeta(parent, nombre) {
-  return gApi('/drive/v3/files?supportsAllDrives=true&fields=id,name,webViewLink', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: nombre, mimeType: FOLDER, parents: [parent] }) });
-}
-// Verifica que 'carpeta' esté dentro de la carpeta raíz del repositorio (hasta 8 niveles)
-async function dentroDe(carpeta, raiz) {
-  let id = carpeta;
-  for (let i = 0; i < 8 && id; i++) {
-    if (id === raiz) return true;
-    const f = await gApi('/drive/v3/files/' + encodeURIComponent(id) + '?supportsAllDrives=true&fields=id,parents');
-    id = (f.parents || [])[0];
-  }
-  return false;
-}
-async function repoPermitido(u, id) {
-  const r = (await pool.query('SELECT * FROM repositorios WHERE id = $1', [+id])).rows[0];
-  if (!r) return null;
-  if (u.rol === 'lider') return null;
-  if (/^P\d+$/.test(u.rol) && r.poligrafista && r.poligrafista !== u.rol) return null;
-  r.raiz = idDeUrl(r.url); return r.raiz ? r : null;
-}
-function errDrive(res, e) {
-  console.error('drive:', e.message);
-  const st = ctxG.getStore() || {};
-  if (st.t) {
-    const m = e.status === 404 ? 'Tu cuenta de Google no tiene acceso a esa carpeta. Pide a quien la administra que te la comparta.'
-      : e.status === 403 ? 'Tu cuenta de Google no tiene permiso de edición en esa carpeta.'
-      : e.status === 401 ? 'Tu conexión con Google venció. Vuelve a «Conectar mi Google Drive».'
-      : 'No se pudo completar la operación en Drive.';
-    if (e.status === 401) { const s2 = ctxG.getStore(); if (s2 && s2.uid) gAcc.delete(s2.uid); }
-    return res.status([401, 403, 404].includes(e.status) ? 400 : 500).json({ ok: false, error: m });
-  }
-  const m = !SA ? 'Drive aún no está conectado. El administrador debe configurar la cuenta de servicio.'
-    : e.status === 404 ? 'La cuenta de servicio no tiene acceso a esa carpeta. Agrégala como miembro de la unidad compartida.'
-    : e.status === 403 ? 'Sin permiso en Drive para esa carpeta (revisa que la cuenta de servicio sea Administrador de contenido).'
-    : 'No se pudo completar la operación en Drive.';
-  res.status(e.status === 404 || e.status === 403 ? 400 : 500).json({ ok: false, error: m });
-}
-app.post('/api/chat/prueba', async (req, res) => {
-  const u = await soloAdmin(req, res); if (!u) return;
-  if (!CHAT_URL) return res.status(400).json({ ok: false, error: 'Falta la variable GOOGLE_CHAT_WEBHOOK en Railway.' });
-  await chatAviso('🔔 Prueba de conexión desde *Seguridad y Riesgos · Polígrafías* (' + u.nombre + ') — ' + hora());
-  res.json({ ok: true });
-});
-app.get('/api/chat/estado', async (req, res) => { const u = await conSesion(req, res); if (!u) return; res.json({ ok: true, conectado: !!CHAT_URL }); });
-app.get('/api/drive/estado', async (req, res) => {
-  const u = await conSesion(req, res); if (!u) return;
-  let vinculado = false, cuentaG = null;
-  if (G_ID) { const r = (await pool.query('SELECT correo FROM google_tokens WHERE usuario_id = $1', [u.id])).rows[0]; vinculado = !!r; cuentaG = r ? r.correo : null; }
-  res.json({ ok: true, oauth: !!G_ID, vinculado, cuentaG, conectado: G_ID ? vinculado : !!SA, cuenta: SA && u.rol === 'admin' ? SA.client_email : undefined });
-});
-app.get('/api/drive/carpeta', async (req, res) => {
-  const u = await conSesion(req, res); if (!u) return;
-  const gx = await prepDrive(u, res); if (!gx) return; ctxG.enterWith(gx);
-  try {
-    const r = await repoPermitido(u, req.query.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
-    const id = String(req.query.id || r.raiz);
-    if (id !== r.raiz && !(await dentroDe(id, r.raiz))) return res.status(403).json({ ok: false, error: 'Esa carpeta no pertenece al repositorio.' });
-    const f = await gApi('/drive/v3/files/' + encodeURIComponent(id) + '?supportsAllDrives=true&fields=id,name,webViewLink');
-    const items = await hijos(id, false);
-    res.json({ ok: true, carpeta: f, carpetas: items.filter(x => x.mimeType === FOLDER), archivos: items.filter(x => x.mimeType !== FOLDER) });
-  } catch (e) { errDrive(res, e); }
-});
-// Busca o crea una ruta de subcarpetas (p. ej. ["2026", "11 NOVIEMBRE"]) dentro del repositorio
-app.post('/api/drive/ruta', async (req, res) => {
-  const u = await conSesion(req, res); if (!u) return;
-  const gx = await prepDrive(u, res); if (!gx) return; ctxG.enterWith(gx);
-  try {
-    const r = await repoPermitido(u, req.body?.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
-    let id = String(req.body?.desde || r.raiz);
-    if (id !== r.raiz && !(await dentroDe(id, r.raiz))) return res.status(403).json({ ok: false, error: 'Esa carpeta no pertenece al repositorio.' });
-    const partes = (Array.isArray(req.body?.partes) ? req.body.partes : []).slice(0, 4), camino = [];
-    let falta = null;
-    for (const p of partes) {
-      const opciones = (Array.isArray(p) ? p : [p]).map(x => String(x).trim().slice(0, 120)).filter(Boolean);
-      if (!opciones.length) continue;
-      const hs = await hijos(id, true), norm = x => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
-      const hit = hs.find(h => opciones.some(o => norm(h.name) === norm(o))) || hs.find(h => opciones.slice(1).some(o => norm(h.name).split(' ').includes(norm(o))));
-      if (hit) { id = hit.id; camino.push({ id, name: hit.name }); } else if (!req.body?.crear) { falta = opciones[0]; break; } else { const c = await crearCarpeta(id, opciones[0]); id = c.id; camino.push({ id, name: opciones[0] }); }
-    }
-    res.json({ ok: true, id, camino, falta });
-  } catch (e) { errDrive(res, e); }
-});
-app.post('/api/drive/nueva', async (req, res) => {
-  const u = await conSesion(req, res); if (!u) return;
-  const gx = await prepDrive(u, res); if (!gx) return; ctxG.enterWith(gx);
-  try {
-    const r = await repoPermitido(u, req.body?.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
-    const padre = String(req.body?.padre || r.raiz), nombre = String(req.body?.nombre || '').trim().slice(0, 120);
-    if (!nombre) return res.status(400).json({ ok: false, error: 'Escribe el nombre de la carpeta.' });
-    if (padre !== r.raiz && !(await dentroDe(padre, r.raiz))) return res.status(403).json({ ok: false, error: 'Esa carpeta no pertenece al repositorio.' });
-    const f = await crearCarpeta(padre, nombre); res.json({ ok: true, id: f.id });
-  } catch (e) { errDrive(res, e); }
-});
-// Subida en streaming (sirve para PDF, imágenes y videos grandes): el cuerpo es el archivo
-app.post('/api/drive/subir', async (req, res) => {
-  const u = await conSesion(req, res); if (!u) return;
-  const gx = await prepDrive(u, res); if (!gx) return; ctxG.enterWith(gx);
-  try {
-    const r = await repoPermitido(u, req.query.repo); if (!r) return res.status(403).json({ ok: false, error: 'Sin acceso a ese repositorio.' });
-    const destino = String(req.query.carpeta || r.raiz), nombre = String(req.query.nombre || 'archivo').slice(0, 200);
-    if (destino !== r.raiz && !(await dentroDe(destino, r.raiz))) return res.status(403).json({ ok: false, error: 'Esa carpeta no pertenece al repositorio.' });
-    const tipo = String(req.headers['content-type'] || 'application/octet-stream'), largo = req.headers['content-length'];
-    if (!largo) return res.status(411).json({ ok: false, error: 'Falta el tamaño del archivo.' });
-    const t = await driveToken();
-    const ini = await fetch(DRIVE + '/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,webViewLink', {
-      method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': tipo, 'X-Upload-Content-Length': largo },
-      body: JSON.stringify({ name: nombre, parents: [destino], description: 'Subido desde Polígrafías por ' + u.nombre }) });
-    if (!ini.ok) { const e = new Error('Drive ' + ini.status + ': ' + (await ini.text()).slice(0, 200)); e.status = ini.status; throw e; }
-    const sesion = ini.headers.get('location');
-    const up = await fetch(sesion, { method: 'PUT', headers: { 'Content-Type': tipo, 'Content-Length': largo }, body: req, duplex: 'half' });
-    if (!up.ok) { const e = new Error('Drive ' + up.status + ': ' + (await up.text()).slice(0, 200)); e.status = up.status; throw e; }
-    const f = await up.json();
-    res.json({ ok: true, archivo: f });
-  } catch (e) { errDrive(res, e); }
-});
+// ===== Sin conexión con Google Workspace =====
+// La app no se conecta a Google (ni Drive, ni Chat, ni ingreso con Google). Los archivos se suben
+// directamente en Drive por cada usuario y en la app solo se guarda el enlace.
+app.get('/api/drive/estado', async (req, res) => { const u = await conSesion(req, res); if (!u) return; res.json({ ok: true, oauth: false, conectado: false }); });
+app.get('/api/google/estado', (req, res) => res.json({ ok: true, activo: false }));
 
 // ===== Pruebas agendadas desde la app (compartidas entre todos los usuarios) =====
 const CAMPOS_BLOQ = ['r', 'e', 'adm', 'obs', 'f', 'h', 'p', 'n', 'doc', 't'];
