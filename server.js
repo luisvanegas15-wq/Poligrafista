@@ -952,8 +952,6 @@ app.delete('/api/repositorios/:id', async (req, res) => {
 // ===== Sin conexión con Google Workspace =====
 // La app no se conecta a Google (ni Drive, ni Chat, ni ingreso con Google). Los archivos se suben
 // directamente en Drive por cada usuario y en la app solo se guarda el enlace.
-app.get('/api/drive/estado', async (req, res) => { const u = await conSesion(req, res); if (!u) return; res.json({ ok: true, oauth: false, conectado: false }); });
-app.get('/api/google/estado', (req, res) => res.json({ ok: true, activo: false }));
 
 // ===== Pruebas agendadas desde la app (compartidas entre todos los usuarios) =====
 const CAMPOS_BLOQ = ['r', 'e', 'adm', 'obs', 'f', 'h', 'p', 'n', 'doc', 't'];

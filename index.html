@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/plus-jakarta-sans-latin-400-normal.woff2) format('woff2')}@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/plus-jakarta-sans-latin-500-normal.woff2) format('woff2')}@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/plus-jakarta-sans-latin-600-normal.woff2) format('woff2')}@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/plus-jakarta-sans-latin-700-normal.woff2) format('woff2')}@font-face{font-family:'Plus Jakarta Sans';font-style:normal;font-weight:800;font-display:swap;src:url(/fonts/plus-jakarta-sans-latin-800-normal.woff2) format('woff2')}</style>
 <title>Seguridad y Riesgos · Polígrafías</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -1005,10 +1005,9 @@ async function pCargar(){if(!API||!S.user||S.force)return;try{const j=await api(
 else{const n=Object.assign({},d);S.tests.push(n);S._psig[n.id]=psig(n);ch=true;}});
 if(ch&&!/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName||'')&&!S.closing)render();}catch(e){}}
 setInterval(pCargar,20000);
-async function apiIniciar(){const qs=new URLSearchParams(location.search),gq=qs.get('g'),gm=qs.get('m')||'';if(gq)history.replaceState(null,'',location.pathname);
+async function apiIniciar(){
 try{const j=await api('/api/salud');if(j&&j.db==='conectada'){API=true;api('/api/codigo/estado').then(g=>{S.cOn=!!(g&&g.activo);if(!S.user)render();}).catch(()=>{});
-if(gq==='err'){S.lf.e=esc(gm||'No se pudo ingresar con Google.');}
-const y=await api('/api/yo');if(y.ok&&y.user){apiEntrar(y.user);if(gq==='err')S.msg=gm;else if(gq==='ok'){S.welcome={};setTimeout(wlRender,600);}else if(gq==='drive'){S.msg='✅ Google Drive conectado: ya puedes subir informes y gráficas con tu cuenta.';S.view='repo';}render();vivoSync();avSync();msjSync();paCargar();plCargar();resCargar().then(pCargar);}}}catch(e){}}
+const y=await api('/api/yo');if(y.ok&&y.user){apiEntrar(y.user);render();vivoSync();avSync();msjSync();paCargar();plCargar();resCargar().then(pCargar);}}}catch(e){}}
 async function doLogin(){if(API){try{const j=await api('/api/login',{u:S.lf.u.trim().toLowerCase(),p:S.lf.p});
 if(j.ok){apiEntrar(j.user);S.welcome=j.bienvenida||{};setTimeout(()=>{vivoSync();avSync();msjSync();paCargar();plCargar();resCargar().then(pCargar);setTimeout(wlRender,600);},300);try{if(S.lf.rem)localStorage.setItem('poli_user',j.user.usuario);else localStorage.removeItem('poli_user');}catch(e){}S.lf={u:'',p:'',e:'',rem:S.lf.rem,show:false};}
 else S.lf.e=j.error||'Correo o contraseña incorrectos.';}catch(e){S.lf.e='No hay conexión con el servidor. Intenta de nuevo.';}render();return;}
@@ -1121,76 +1120,19 @@ const RPM={res:['PDF Control','PDF Preempleo','Gráficas del polígrafo','Autori
 async function rpCargar(){if(!API||!S.user)return;S.rp.busy=true;try{const j=await api('/api/repositorios');if(j.ok){S.rp.list=j.repositorios;S.rp.cats=j.categorias;}else S.rp.list=[];}catch(e){S.rp.list=[];}S.rp.busy=false;render();}
 function repoBar(v){if(!API||!RPM[v])return '';if(S.rp.list===null){if(!S.rp.busy)setTimeout(rpCargar,0);return '';}
 const L=S.rp.list.filter(r=>RPM[v].includes(r.categoria)||r.categoria==='Otro'&&false);if(!L.length)return S.role==='admin'?'<p class="note rp-n">Aún no hay carpetas de Drive asignadas para este módulo. <button type="button" class="lk" data-act="nav" data-v="repo" style="display:inline;width:auto;margin:0" data-cfg="1">Asignarlas</button></p>':'';
-return '<div class="rp-bar"><span>📁 Carpetas en Drive</span><button type="button" class="rp-ch rp-up" data-act="nav" data-v="repo">'+((S.dv.estado&&!S.dv.estado.oauth&&!S.dv.estado.conectado)?'📁 Mis carpetas':'⬆ Subir archivos')+'</button>'+L.map(r=>'<a class="rp-ch" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer" title="'+esc(r.categoria)+'">'+esc(r.nombre)+(r.poligrafista&&!isP()?' <small>· '+esc(PN[r.poligrafista]||r.poligrafista)+'</small>':'')+' ↗</a>').join('')+'</div>';}
+return '<div class="rp-bar"><span>📁 Carpetas en Drive</span><button type="button" class="rp-ch rp-up" data-act="nav" data-v="repo">📁 Mis carpetas</button>'+L.map(r=>'<a class="rp-ch" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer" title="'+esc(r.categoria)+'">'+esc(r.nombre)+(r.poligrafista&&!isP()?' <small>· '+esc(PN[r.poligrafista]||r.poligrafista)+'</small>':'')+' ↗</a>').join('')+'</div>';}
 /* ===== Cierre de prueba: informe PDF y gráficas a Drive ===== */
-S.dp=null;
+
 function sugF(cat,f){const d=f&&/^\d{4}-\d{2}/.test(f)?f:TODAY,y=d.slice(0,4),m=+d.slice(5,7)-1,mm=d.slice(5,7);if(cat==='Gráficas del polígrafo')return [[y]];return [[y],[mm+' '+MESES[m],MESES[m],mm,String(m+1)]];}
 function repoPara(cat,p){const L=(S.rp.list||[]).filter(r=>r.categoria===cat);return L.find(r=>r.poligrafista===p)||L.find(r=>!r.poligrafista)||L[0]||null;}
 function clDest(c,k,x){if(c[k+'D'])return c[k+'D'];const cat=k==='pdf'?(x.t==='Preempleo'?'PDF Preempleo':'PDF Control'):'Gráficas del polígrafo',r=repoPara(cat,x.p)||(k==='pdf'?repoPara('PDF Control',x.p):null);
 return r?{repo:r,id:null,label:r.nombre+' / '+sugF(cat,x.f).map(p=>p[0]).join(' / '),parts:sugF(cat,x.f)}:null;}
-function clDrive(x,c){if(!API)return '<label>Informe PDF (opcional)<input type="file" data-c="pdf" accept="application/pdf"></label>';
-if(S.rp.list===null&&!S.rp.busy)setTimeout(rpCargar,0);if(S.dv.estado===null){S.dv.estado=false;setTimeout(dvEstado,0);}
-const on=S.dv.estado&&S.dv.estado.conectado,dP=clDest(c,'pdf',x),dG=clDest(c,'graf',x);
-if(!on&&!(S.dv.estado&&S.dv.estado.oauth)){const blk=(t,k,d)=>'<div class="cl-b"><b>'+t+'</b>'+(d&&d.repo&&d.repo.url?'<a class="btn sm sec" href="'+esc(d.repo.url)+'" target="_blank" rel="noopener noreferrer" style="margin:0">Abrir carpeta en Drive ↗</a><small>'+esc(d.label)+'</small>':'<small>Sin carpeta asignada en Drive</small>')+'<input data-c="'+k+'" inputmode="url" placeholder="Pega aquí el enlace de Drive" value="'+esc(c[k]||'')+'"></div>';
+function clDrive(x,c){if(!API)return '';if(S.rp.list===null&&!S.rp.busy)setTimeout(rpCargar,0);const dP=clDest(c,'pdf',x),dG=clDest(c,'graf',x);
+const blk=(t,k,d)=>'<div class="cl-b"><b>'+t+'</b>'+(d&&d.repo&&d.repo.url?'<a class="btn sm sec" href="'+esc(d.repo.url)+'" target="_blank" rel="noopener noreferrer" style="margin:0">Abrir carpeta en Drive ↗</a><small>'+esc(d.label)+'</small>':'<small>Sin carpeta asignada en Drive</small>')+'<input data-c="'+k+'" inputmode="url" placeholder="Pega aquí el enlace de Drive" value="'+esc(c[k]||'')+'"></div>';
 return '<div class="cl-dv"><h4>Archivos de la prueba</h4><p class="mut" style="margin:0 0 10px">Sube los archivos directamente en el Drive de la empresa y pega aquí los enlaces. La app no guarda los archivos, solo el enlace para encontrarlos.</p><div class="cl-g">'+blk('📄 Informe (PDF)','linf',dP)+blk('🎞️ Gráficas (carpeta)','lgraf',dG)+'</div></div>';}
-const dst=(k,d)=>d?'<div class="cl-dst">📁 <span>'+esc(d.label)+'</span>'+(on?'<button type="button" class="lk" data-act="dpopen" data-k="'+k+'" style="width:auto;margin:0">Cambiar carpeta</button>':'')+'</div>':'<div class="cl-dst bad">No hay carpeta asignada para esto. '+(S.role==='admin'?'Asígnala en Drive → Configurar carpetas.':'Pídele al administrador que la asigne.')+'</div>';
-return '<div class="cl-dv"><h4>Archivos de la prueba</h4>'+(on?'':'<p class="note" style="margin:0 0 10px">La subida a Drive aún no está conectada: el informe se guarda solo en este equipo y las gráficas no se pueden subir todavía.</p>')+
-'<div class="cl-g"><div class="cl-b"><b>📄 Informe (PDF)</b><label class="btn sm sec" style="margin:0">'+(c.pdf?'Cambiar archivo':'Elegir PDF')+'<input type="file" data-c="pdf" accept="application/pdf" hidden></label><small>'+(c.pdf?esc(c.pdf):'Sin archivo')+'</small>'+(on?dst('pdf',dP):'')+'</div>'+
-'<div class="cl-b"><b>🎞️ Gráficas (carpeta con video y archivos)</b><label class="btn sm sec" style="margin:0'+(on?'':';opacity:.5;pointer-events:none')+'">'+(c.graf?'Cambiar carpeta':'Elegir carpeta')+'<input type="file" id="cl-graf" webkitdirectory multiple hidden></label><small>'+(c.graf?esc(c.grafN)+' · '+c.graf.length+' archivo(s)':'Sin carpeta')+'</small>'+(on?dst('graf',dG):'')+'</div></div></div>'+dpHtml();}
-function dpHtml(){const P=S.dp;if(!P)return '';return '<div class="ms-bg" data-act="dpx"></div><div class="dp" role="dialog" aria-label="Elegir carpeta"><div class="ms-hd"><b>Elegir carpeta</b><button type="button" data-act="dpx" aria-label="Cerrar">×</button></div><div class="dp-b">'+
-'<select id="dp-repo">'+(S.rp.list||[]).map(r=>'<option value="'+r.id+'"'+(P.repo&&P.repo.id===r.id?' selected':'')+'>'+esc(r.nombre)+' · '+esc(r.categoria)+'</option>').join('')+'</select>'+
-'<div class="dv-bc">'+P.stack.map((s,i)=>'<button type="button" data-act="dpbc" data-i="'+i+'"'+(i===P.stack.length-1?' class="on"':'')+'>'+esc(s.name)+'</button>').join('<span>›</span>')+'</div>'+(P.err?'<div class="fl-msg">'+esc(P.err)+'</div>':'')+
-'<div class="dp-l">'+(P.busy?'<p class="mut">Abriendo…</p>':P.data?(P.data.carpetas.map(f=>'<button type="button" class="dv-f" data-act="dpin" data-id="'+f.id+'" data-n="'+esc(f.name)+'"><span>📁</span>'+esc(f.name)+'</button>').join('')||'<p class="mut">Sin subcarpetas.</p>'):'')+'</div>'+
-'<div class="dv-new"><input id="dp-nn" placeholder="Nueva carpeta aquí"><button type="button" class="btn sm sec" data-act="dpnew" style="margin:0">+ Crear</button></div>'+
-'<button type="button" class="btn" data-act="dpok" style="width:100%;margin:6px 0 0">Guardar aquí: '+esc(P.stack.map(s=>s.name).join(' / '))+'</button></div></div>';}
-async function dpLoad(id,name,push){const P=S.dp;P.busy=true;P.err='';render();const j=await api('/api/drive/carpeta?repo='+P.repo.id+(id?'&id='+encodeURIComponent(id):'')).catch(()=>({}));P.busy=false;
-if(j.ok){P.data=j;if(push)P.stack.push({id:j.carpeta.id,name:name||j.carpeta.name});}else P.err=j.error||'No se pudo abrir.';render();}
-document.addEventListener('click',async e=>{const b=e.target.closest&&e.target.closest('[data-act]');if(!b||!/^dp/.test(b.dataset.act))return;e.stopImmediatePropagation();const a=b.dataset.act,c=S.cl,x=S.tests.find(t=>t.id===S.closing);
-if(a==='dpopen'){const d=clDest(c,b.dataset.k,x);S.dp={k:b.dataset.k,repo:d?d.repo:(S.rp.list||[])[0],stack:[],data:null};if(!S.dp.repo){S.dp=null;render();return;}S.dp.stack=[{id:null,name:S.dp.repo.nombre}];await dpLoad(null,'',false);S.dp.stack[0].id=S.dp.data&&S.dp.data.carpeta.id;
-if(d&&d.parts){const j=await api('/api/drive/ruta',{repo:S.dp.repo.id,partes:d.parts,soloExistentes:true}).catch(()=>({}));if(j.ok){S.dp.stack=S.dp.stack.slice(0,1).concat(j.camino||[]);await dpLoad(j.id,'',false);}}return;}
-if(a==='dpx'){S.dp=null;}
-else if(a==='dpin'){await dpLoad(b.dataset.id,b.dataset.n,true);return;}
-else if(a==='dpbc'){const i=+b.dataset.i,s=S.dp.stack[i];S.dp.stack=S.dp.stack.slice(0,i+1);await dpLoad(s.id,'',false);return;}
-else if(a==='dpnew'){const n=(document.getElementById('dp-nn')||{}).value||'';if(n.trim()){const j=await api('/api/drive/nueva',{repo:S.dp.repo.id,padre:S.dp.data.carpeta.id,nombre:n}).catch(()=>({}));if(j.ok){await dpLoad(j.id,n,true);return;}S.dp.err=j.error||'No se pudo crear.';}}
-else if(a==='dpok'){const P=S.dp;c[P.k+'D']={repo:P.repo,id:P.data.carpeta.id,label:P.stack.map(s=>s.name).join(' / ')};S.dp=null;}
-render();},true);
-document.addEventListener('change',async e=>{if(e.target&&e.target.id==='dp-repo'){const P=S.dp;P.repo=S.rp.list.find(r=>r.id===+e.target.value);P.stack=[{id:null,name:P.repo.nombre}];await dpLoad(null,'',false);P.stack[0].id=P.data&&P.data.carpeta.id;}
-if(e.target&&e.target.id==='cl-graf'){const fs=[...e.target.files];S.cl.graf=fs.length?fs:null;S.cl.grafN=fs.length?(fs[0].webkitRelativePath||'').split('/')[0]||'Gráficas':'';render();}});
-function clUp(file,repo,carpeta,c){return new Promise(res=>{const it={n:file.name,p:0,ok:null};(c.up=c.up||[]).push(it);const R=()=>{const el=document.getElementById('cl-up');if(el)el.innerHTML=c.up.map(u=>'<div class="dv-u'+(u.ok===false?' bad':u.ok?' ok':'')+'"><span>'+esc(u.n)+'</span><div class="dv-pb"><i style="width:'+u.p+'%"></i></div><small>'+(u.ok===null?u.p+'%':u.ok?'Listo':esc(u.e||'Error'))+'</small></div>').join('');};R();
-const q=new XMLHttpRequest();q.open('POST','/api/drive/subir?repo='+repo.id+'&carpeta='+encodeURIComponent(carpeta)+'&nombre='+encodeURIComponent(file.name));q.withCredentials=true;q.setRequestHeader('Content-Type',file.type||'application/octet-stream');
-q.upload.onprogress=ev=>{if(ev.lengthComputable){it.p=Math.round(100*ev.loaded/ev.total);R();}};q.onload=()=>{let j={};try{j=JSON.parse(q.responseText);}catch(x){}it.ok=!!j.ok;it.e=j.error;it.p=100;R();res(j.ok?j.archivo:null);};q.onerror=()=>{it.ok=false;it.e='Se perdió la conexión';R();res(null);};q.send(file);});}
-async function clCarpeta(d){if(d.id)return d.id;const j=await api('/api/drive/ruta',{repo:d.repo.id,partes:d.parts}).catch(()=>({}));if(j.ok&&!j.falta)return j.id;S.cl._fe=j.ok?'En Drive no existe la carpeta «'+j.falta+'» en '+d.repo.nombre+'. Usa «Cambiar carpeta» para elegir la correcta.':(j.error||'');return null;}
-document.addEventListener('click',async e=>{const b=e.target.closest&&e.target.closest('[data-act="cerrar"]');if(!b)return;const c=S.cl,x=S.tests.find(t=>t.id===S.closing);if(!x||!API||c._ok)return;
-const on=S.dv.estado&&S.dv.estado.conectado;if(!on||(!c.pdff&&!c.graf))return;
-if(c.r==='Suspendida'&&!c.obs.trim())return;if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)&&!(c.admt||'').trim()&&!x.adm)return;
-e.stopImmediatePropagation();b.disabled=true;b.textContent='Subiendo a Drive…';c.links={};c._fe='';let fallo=false;
-if(c.pdff){const d=clDest(c,'pdf',x);if(!d){fallo='No hay carpeta asignada para el informe.';}else{const id=await clCarpeta(d);const f=id&&await clUp(c.pdff,d.repo,id,c);if(f)c.links.inf=f.webViewLink;else fallo=c._fe||'No se pudo subir el informe.';}}
-if(c.graf&&!fallo){const d=clDest(c,'graf',x);if(!d){fallo='No hay carpeta asignada para las gráficas.';}else{const base=await clCarpeta(d);const nf=base&&await api('/api/drive/nueva',{repo:d.repo.id,padre:base,nombre:c.grafN||(x.doc+' - '+x.n)}).catch(()=>({}));
-if(!nf||!nf.ok)fallo=c._fe||(nf&&nf.error)||'No se pudo crear la carpeta de gráficas.';else{let ok=0;for(const f of c.graf){if(await clUp(f,d.repo,nf.id,c))ok++;}c.links.graf='https://drive.google.com/drive/folders/'+nf.id;if(ok<c.graf.length)fallo='Algunas gráficas no se subieron ('+ok+' de '+c.graf.length+').';}}}
-if(fallo){S.msg=fallo+' Revisa y vuelve a intentar; la prueba aún no se cerró.';b.disabled=false;render();return;}
-c._ok=true;b.disabled=false;b.click();},true);
-/* ===== Subir archivos a Drive desde la app ===== */
-S.dv={tab:'up',repo:null,stack:[],data:null,busy:false,err:'',estado:null,up:[],sub:''};
+/* ===== Carpetas de Drive: solo enlaces, sin conexión con Google ===== */
+S.dv={tab:'up',estado:{oauth:false,conectado:false}};
 const MESES=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
-function dvSug(cat){const d=new Date(),y=String(d.getFullYear()),m=d.getMonth(),mm=String(m+1).padStart(2,'0');
-if(cat==='Formatos'||cat==='Otro')return null;if(cat==='Gráficas del polígrafo')return [[y]];return [[y],[mm+' '+MESES[m],MESES[m],mm,String(m+1)]];}
-async function dvEstado(){try{const j=await api('/api/drive/estado');S.dv.estado=j.ok?j:{conectado:false};}catch(e){S.dv.estado={conectado:false};}render();}
-async function dvAbrir(id,nombre,push){const V=S.dv;V.busy=true;V.err='';render();try{const j=await api('/api/drive/carpeta?repo='+V.repo.id+(id?'&id='+encodeURIComponent(id):''));
-if(j.ok){V.data=j;if(push)V.stack.push({id:j.carpeta.id,name:j.carpeta.name});else if(!V.stack.length)V.stack=[{id:j.carpeta.id,name:V.repo.nombre}];}else V.err=j.error||'No se pudo abrir la carpeta.';}catch(e){V.err='Sin conexión con el servidor.';}V.busy=false;render();}
-async function dvRuta(partes){const V=S.dv;V.busy=true;V.err='';render();const j=await api('/api/drive/ruta',{repo:V.repo.id,partes}).catch(()=>({}));
-if(!j.ok){V.err=j.error||'No se pudo abrir la carpeta sugerida.';V.busy=false;render();return;}
-const root=V.stack[0];await dvAbrir(j.id,'',false);V.stack=[root].concat(j.camino||[]);if(j.falta)V.err='No existe la carpeta «'+j.falta+'» aquí. Navega y elige la correcta (la app no crea carpetas automáticamente).';render();}
-function dvSubir(file,carpeta,nombre){return new Promise(res=>{const V=S.dv,it={n:nombre||file.name,p:0,ok:null};V.up.unshift(it);dvUpR();
-const x=new XMLHttpRequest();x.open('POST','/api/drive/subir?repo='+V.repo.id+'&carpeta='+encodeURIComponent(carpeta)+'&nombre='+encodeURIComponent(it.n));x.withCredentials=true;x.setRequestHeader('Content-Type',file.type||'application/octet-stream');
-x.upload.onprogress=e=>{if(e.lengthComputable){it.p=Math.round(100*e.loaded/e.total);dvUpR();}};
-x.onload=()=>{let j={};try{j=JSON.parse(x.responseText);}catch(e){}it.ok=!!j.ok;it.e=j.error;it.l=j.archivo&&j.archivo.webViewLink;it.p=100;dvUpR();res(it.ok);};x.onerror=()=>{it.ok=false;it.e='Se perdió la conexión.';dvUpR();res(false);};x.send(file);});}
-function dvUpR(){const el=document.getElementById('dv-up');if(el)el.innerHTML=dvUpHtml();}
-function dvUpHtml(){return S.dv.up.slice(0,30).map(u=>'<div class="dv-u'+(u.ok===false?' bad':u.ok?' ok':'')+'"><span>'+esc(u.n)+'</span><div class="dv-pb"><i style="width:'+u.p+'%"></i></div><small>'+(u.ok===null?u.p+'%':u.ok?(u.l?'<a href="'+esc(u.l)+'" target="_blank" rel="noopener">Ver ↗</a>':'Listo'):esc(u.e||'Error'))+'</small></div>').join('');}
-async function dvFiles(files,folderMode){const V=S.dv,dest=V.data&&V.data.carpeta.id;if(!dest||!files.length)return;
-if(folderMode){const by={};[...files].forEach(f=>{const top=(f.webkitRelativePath||'').split('/')[0]||'Carpeta';(by[top]=by[top]||[]).push(f);});
-for(const top of Object.keys(by)){const j=await api('/api/drive/nueva',{repo:V.repo.id,padre:dest,nombre:top}).catch(()=>({}));if(!j.ok){V.err=j.error||'No se pudo crear la carpeta '+top+'.';render();continue;}for(const f of by[top])await dvSubir(f,j.id,f.name);}}
-else for(const f of files)await dvSubir(f,dest,f.name);
-await dvAbrir(dest,'',false);}
 /* ===== Bitácora de actividades ===== */
 function btIni(){if(S.bt)return S.bt;const h=new Date(),d=new Date(h.getTime()-6*864e5),f=x=>x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');S.bt={desde:f(d),hasta:f(h),usuario:'',tipo:'',texto:'',filas:null,us:null};btCargar();return S.bt;}
 async function btCargar(){const B=S.bt;B.cargando=1;B.err='';render();
@@ -1216,41 +1158,13 @@ document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest
 if(b.dataset.act==='btbus'){const t=document.querySelector('[data-bt="texto"]');if(t)B.texto=t.value;btCargar();return;}
 saveX('Bitacora_'+B.desde+'_a_'+B.hasta,'Bitácora',['Fecha y hora','Nombre','Usuario','Rol','Acción','Detalle','Resultado','Equipo','IP'],(B.filas||[]).map(r=>[btFh(r.fecha),r.nombre||'',r.usuario||'',r.rol||'',r.accion,r.detalle||'',r.resultado==='fallido'?'Fallido':'OK',btEq(r.agente),r.ip||'']));},true);
 function vRepo(){if(!API)return '<div class="card"><p>Disponible en la versión con servidor.</p></div>';const V=S.dv,R=S.rp,ad=S.role==='admin';
-if(V.estado===null){V.estado=false;setTimeout(dvEstado,0);}if(R.list===null&&!R.busy)setTimeout(rpCargar,0);
-const tabs=ad?'<div class="ct-seg" style="margin:0 0 14px"><button type="button" data-act="dvtab" data-t="up"'+(V.tab==='up'?' class="on"':'')+'>'+((S.dv.estado&&!S.dv.estado.oauth&&!S.dv.estado.conectado)?'Mis carpetas':'Subir archivos')+'</button><button type="button" data-act="dvtab" data-t="cfg"'+(V.tab==='cfg'?' class="on"':'')+'>Configurar carpetas</button></div>':'';
+if(R.list===null&&!R.busy)setTimeout(rpCargar,0);
+const tabs=ad?'<div class="ct-seg" style="margin:0 0 14px"><button type="button" data-act="dvtab" data-t="up"'+(V.tab==='up'?' class="on"':'')+'>Mis carpetas</button><button type="button" data-act="dvtab" data-t="cfg"'+(V.tab==='cfg'?' class="on"':'')+'>Configurar carpetas</button></div>':'';
 if(ad&&V.tab==='cfg')return tabs+dvConexion()+vRepoCfg();
-const est=V.estado&&(V.estado.oauth||V.estado.conectado===false)?dvConexion():'';
-const L=R.list||[];if(V.estado&&!V.estado.oauth&&!V.estado.conectado)return tabs+est+'<div class="card"><h3>Mis carpetas de Drive</h3><p class="mut" style="margin:0 0 12px">Abre la carpeta, sube ahí tus archivos y, al cerrar la prueba, pega el enlace del informe y de las gráficas.</p>'+(R.list===null?'<p class="mut">Cargando…</p>':!L.length?'<p class="mut">'+(ad?'Primero asigna las carpetas en «Configurar carpetas».':'El administrador aún no ha asignado carpetas.')+'</p>':'<div class="dv-rs">'+L.map(r=>'<a class="dv-r" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit"><span>📁</span><b>'+esc(r.nombre)+' ↗</b><small>'+esc(r.categoria)+(r.poligrafista&&!isP()?' · '+esc(PN[r.poligrafista]||''):'')+'</small></a>').join('')+'</div>')+'</div>';
-if(!V.repo)return tabs+est+'<div class="card"><h3>¿Dónde vas a subir?</h3><p class="mut" style="margin:0 0 12px">Elige la carpeta del repositorio. La app te propone la subcarpeta de año y mes; también puedes navegar y elegir otra.</p>'+(R.list===null?'<p class="mut">Cargando…</p>':!L.length?'<p class="mut">'+(ad?'Primero asigna las carpetas en «Configurar carpetas».':'El administrador aún no ha asignado carpetas.')+'</p>':'<div class="dv-rs">'+L.map(r=>'<button type="button" class="dv-r" data-act="dvrepo" data-id="'+r.id+'"><span>📁</span><b>'+esc(r.nombre)+'</b><small>'+esc(r.categoria)+(r.poligrafista&&!isP()?' · '+esc(PN[r.poligrafista]||''):'')+'</small></button>').join('')+'</div>')+'</div>';
-const sug=dvSug(V.repo.categoria),D0=V.data;
-const bc='<div class="dv-bc">'+V.stack.map((s,i)=>'<button type="button" data-act="dvbc" data-i="'+i+'"'+(i===V.stack.length-1?' class="on"':'')+'>'+esc(s.name)+'</button>').join('<span>›</span>')+'</div>';
-const head='<div class="card dv-h"><div class="dv-ht"><button type="button" class="btn sm sec" data-act="dvback" style="margin:0">‹ Repositorios</button><div><b>'+esc(V.repo.nombre)+'</b><small>'+esc(V.repo.categoria)+'</small></div><a class="btn sm sec" href="'+esc(V.repo.url)+'" target="_blank" rel="noopener" style="margin:0;text-decoration:none">Abrir en Drive ↗</a></div>'+bc+
-(sug?'<button type="button" class="btn sm" data-act="dvsug" style="margin:10px 0 0">📅 Ir a '+sug.map(p=>p[0]).join(' / ')+'</button>':'')+'</div>';
-const er=V.err?'<div class="fl-msg">'+esc(V.err)+'</div>':'';
-const body=V.busy&&!D0?'<div class="card"><p class="mut">Abriendo carpeta…</p></div>':D0?'<div class="card"><div class="dv-grid">'+
-(D0.carpetas.map(c=>'<button type="button" class="dv-f" data-act="dvin" data-id="'+c.id+'" data-n="'+esc(c.name)+'"><span>📁</span>'+esc(c.name)+'</button>').join('')||'<p class="mut" style="margin:0">Sin subcarpetas.</p>')+'</div>'+
-'<div class="dv-new"><input id="dv-nn" placeholder="'+(V.repo.categoria==='Gráficas del polígrafo'?'Ej. 1110443459 - NOMBRE DEL EVALUADO':'Nombre de la nueva carpeta')+'"><button type="button" class="btn sm sec" data-act="dvnew" style="margin:0">+ Crear carpeta aquí</button></div>'+
-'<div class="dv-drop" id="dv-drop"><b>Arrastra aquí los archivos</b><span>o</span><label class="btn sm" style="margin:0">Elegir archivos<input type="file" id="dv-in" multiple hidden accept=".pdf,image/*,video/*,.xlsx,.docx"></label>'+(V.repo.categoria==='Gráficas del polígrafo'?'<label class="btn sm sec" style="margin:0">Subir carpeta completa<input type="file" id="dv-dir" webkitdirectory multiple hidden></label>':'')+'<small>Se suben a: <b>'+esc(V.stack.map(s=>s.name).join(' / '))+'</b></small></div>'+
-'<div id="dv-up">'+dvUpHtml()+'</div>'+
-(D0.archivos.length?'<h4 class="rp-h">Archivos en esta carpeta · '+D0.archivos.length+'</h4><div class="dv-fl">'+D0.archivos.slice(0,100).map(f=>'<a href="'+esc(f.webViewLink||'#')+'" target="_blank" rel="noopener">'+(/video/.test(f.mimeType)?'🎞️':/image/.test(f.mimeType)?'🖼️':/pdf/.test(f.mimeType)?'📄':'📎')+' '+esc(f.name)+'</a>').join('')+'</div>':'')+'</div>':'';
-return tabs+est+er+head+body;}
-function dvConexion(){const E=S.dv.estado||{};if(!E.oauth&&!E.conectado)return '<p class="note" style="margin:0 0 14px">📎 Drive funciona por enlaces: cada quien sube los archivos directamente en Drive y en la app solo se guarda el enlace al cerrar la prueba.</p>';
-
-if(E.conectado)return S.role==='admin'?'<p class="note" style="margin:0 0 14px">✅ Drive conectado con la cuenta de servicio <b>'+esc(E.cuenta||'')+'</b>. Agrégala como <b>Administrador de contenido</b> en la unidad compartida.</p>':'';
-return S.role==='admin'?'<div class="card au-pend"><h3 style="margin:0 0 6px">Conectar Google Drive</h3><p class="mut" style="margin:0 0 8px">Para que la app suba archivos a la unidad compartida falta configurar una cuenta de servicio de Google (una sola vez). Te guío paso a paso desde el chat.</p></div>':'<p class="note" style="margin:0 0 14px">La subida directa a Drive aún no está activa. Mientras tanto puedes abrir la carpeta en Drive y subir desde allí.</p>';}
-document.addEventListener('click',async e=>{const b=e.target.closest&&e.target.closest('[data-act]');if(!b||!/^dv/.test(b.dataset.act))return;e.stopImmediatePropagation();const a=b.dataset.act,V=S.dv;V.err='';
-if(a==='dvtab'){V.tab=b.dataset.t;}
-else if(a==='dvrepo'){V.repo=S.rp.list.find(r=>r.id===+b.dataset.id);V.stack=[];V.data=null;V.up=[];if(V.estado&&V.estado.conectado){await dvAbrir(null,'',false);return;}}
-else if(a==='dvback'){V.repo=null;V.data=null;V.stack=[];}
-else if(a==='dvin'){await dvAbrir(b.dataset.id,b.dataset.n,true);return;}
-else if(a==='dvbc'){const i=+b.dataset.i,s=V.stack[i];if(s&&s.id){V.stack=V.stack.slice(0,i);await dvAbrir(s.id,'',true);if(i===0)V.stack[0].name=V.repo.nombre;render();}return;}
-else if(a==='dvsug'){await dvRuta(dvSug(V.repo.categoria));return;}
-else if(a==='dvnew'){const n=(document.getElementById('dv-nn')||{}).value||'';if(!n.trim()){V.err='Escribe el nombre de la carpeta.';}else{const j=await api('/api/drive/nueva',{repo:V.repo.id,padre:V.data.carpeta.id,nombre:n}).catch(()=>({}));if(j.ok){await dvAbrir(j.id,n,true);return;}V.err=j.error||'No se pudo crear.';}}
-render();},true);
-document.addEventListener('change',e=>{if(e.target&&(e.target.id==='dv-in'||e.target.id==='dv-dir')){const fs=[...e.target.files];dvFiles(fs,e.target.id==='dv-dir');e.target.value='';}});
-document.addEventListener('dragover',e=>{const d=e.target.closest&&e.target.closest('#dv-drop');if(d){e.preventDefault();d.classList.add('on');}});
-document.addEventListener('dragleave',e=>{const d=e.target.closest&&e.target.closest('#dv-drop');if(d)d.classList.remove('on');});
-document.addEventListener('drop',e=>{const d=e.target.closest&&e.target.closest('#dv-drop');if(d){e.preventDefault();d.classList.remove('on');dvFiles([...e.dataTransfer.files],false);}});
+const L=R.list||[];
+return tabs+dvConexion()+'<div class="card"><h3>Mis carpetas de Drive</h3><p class="mut" style="margin:0 0 12px">Abre la carpeta, sube ahí tus archivos y, al cerrar la prueba, pega el enlace del informe y de las gráficas.</p>'+(R.list===null?'<p class="mut">Cargando…</p>':!L.length?'<p class="mut">'+(ad?'Primero asigna las carpetas en «Configurar carpetas».':'El administrador aún no ha asignado carpetas.')+'</p>':'<div class="dv-rs">'+L.map(r=>'<a class="dv-r" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit"><span>📁</span><b>'+esc(r.nombre)+' ↗</b><small>'+esc(r.categoria)+(r.poligrafista&&!isP()?' · '+esc(PN[r.poligrafista]||''):'')+'</small></a>').join('')+'</div>')+'</div>';}
+function dvConexion(){return '<p class="note" style="margin:0 0 14px">📎 Drive funciona por enlaces: cada quien sube los archivos directamente en Drive y en la app solo se guarda el enlace al cerrar la prueba.</p>';}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-act="dvtab"]');if(!b)return;e.stopImmediatePropagation();S.dv.tab=b.dataset.t;render();},true);
 function vRepoCfg(){const R=S.rp;
 const f=R.f||(R.f={nombre:'',categoria:(R.cats[0]||'PDF Control'),url:'',poligrafista:''});
 const form='<div class="card"><h3>'+(f.id?'Editar carpeta':'Asignar carpeta de Drive')+'</h3><p class="mut" style="margin:0 0 12px">Crea la carpeta en el Drive de la empresa, compártela con quien deba acceder y pega aquí su enlace. Aparecerá como acceso directo en el módulo correspondiente.</p>'+(R.err?'<div class="fl-msg">'+esc(R.err)+'</div>':'')+
@@ -1347,12 +1261,12 @@ else if(a==='rxls2'){rxls2();return;}
 else if(a==='gd'){S.cd=d.d;S.cv='d';}
 else if(a==='cp')S.cp=d.p;
 else if(a==='cell'){const au=ausente(d.p,d.d,d.h);if(au)S.msg=PN[d.p]+' tiene permiso ('+ausTxt(au)+'): ese horario no se puede agendar.';else{S.form.f=d.d;S.form.h=d.h;S.form.p=d.p;S.form.ciudad=CIT(d.p)[0];S.view='prog';S.msg='';}}
-else if(a==='close'){S.closing=+d.id;S.cl={r:'Aprobó',obs:'',admt:'',pdf:'',pdff:null,graf:null,grafN:'',up:[]};S.dp=null;S.msg='';}
-else if(a==='corr'){const x=S.tests.find(t=>t.id===+d.id);if(x&&S.role==='admin'){S.closing=x.id;S.cl={corr:1,motivo:'',r:x.e==='Realizada'?x.r:x.e,obs:x.obs||'',admt:x.adm||'',pdf:'',pdff:null,graf:null,grafN:'',up:[]};S.dp=null;S.msg='';window.scrollTo(0,0);}}
+else if(a==='close'){S.closing=+d.id;S.cl={r:'Aprobó',obs:'',admt:'',pdf:'',pdff:null,graf:null,grafN:'',up:[]};S.msg='';}
+else if(a==='corr'){const x=S.tests.find(t=>t.id===+d.id);if(x&&S.role==='admin'){S.closing=x.id;S.cl={corr:1,motivo:'',r:x.e==='Realizada'?x.r:x.e,obs:x.obs||'',admt:x.adm||'',pdf:'',pdff:null,graf:null,grafN:'',up:[]};S.msg='';window.scrollTo(0,0);}}
 else if(a==='start'){const x=S.tests.find(t=>t.id===+d.id);if(x){x.e='En curso';x.t0=Date.now();x.fase=0;x.h0=hhmm();x.tl=[{k:'Inicio',at:x.h0}];vivoP(x);sendMail({to:['administrador@suitepoligrafia.example'],subj:'Prueba iniciada · '+x.n,body:PN[x.p]+' inició la prueba de '+x.n+' ('+x.t+', '+x.ciudad+') a las '+x.h0+'. Puedes seguir el avance en el dashboard.',att:[]});S.msg='Prueba iniciada: el administrador ya la ve en ejecución en su dashboard.';}}
 else if(a==='nextf'){const x=S.tests.find(t=>t.id===+d.id);if(x&&x.fase<FASES.length-1){x.fase++;(x.tl=x.tl||[]).push({k:FASES[x.fase],at:hhmm()});vivoP(x);S.msg='Etapa actual: '+FASES[x.fase]+'.';}}
 else if(a==='pg'){S.pg[d.k]=+d.to;}
-else if(a==='cancelc'){S.closing=0;S.dp=null;}
+else if(a==='cancelc'){S.closing=0;}
 else if(a==='vf'){S.vf=d.k;S.pg.venc=1;}
 else if(a==='toprog'){S.queue=vrows().filter(o=>S.sel[o.x.doc]).map(o=>({n:o.x.n,doc:o.x.doc,cargo:o.x.cargo,l:o.x.l,ciudad:o.x.ciudad,nx:o.nx}));S.sel={};S.bf.f='';S.bf.p='';S.view='prog';S.msg='';}
 else if(a==='qload')ql(+d.i);
@@ -1380,7 +1294,7 @@ else if(a==='dnot'){const n=S.tests.filter(x=>x.f===S.dd&&x.e!=='Reprogramar').l
 else if(a==='rsend'){const q=isP()?S.role:S.rs;S.msg='Resumen de '+PN[q]+' del '+fmt(S.dd)+' enviado al administrador y al analista (simulado): '+dayAct(q,S.dd).length+' actividades.';}
 else if(a==='cerrar'){const x=S.tests.find(t=>t.id===S.closing),c=S.cl;
 if(c.corr&&(c.motivo||'').trim().length<10)S.msg='Escribe el motivo de la corrección (mínimo 10 caracteres).';else if(c.r==='Suspendida'&&!c.obs.trim())S.msg='Escribe las observaciones para suspender la prueba.';else if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)&&!(c.admt||'').trim()&&!x.adm)S.msg='Escribe las admisiones antes de cerrar la prueba (puedes indicar «Sin admisiones»).';
-else{if(c.corr)x.corr={motivo:c.motivo.trim()};x.obs=c.obs.trim();if(!c.links){const ok=v=>/^https:\/\//i.test(String(v||'').trim()),lk={};if(ok(c.linf))lk.inf=c.linf.trim();if(ok(c.lgraf))lk.graf=c.lgraf.trim();if(lk.inf||lk.graf)c.links=lk;}if(c.links)x.drive=Object.assign({},x.drive||{},c.links);if((c.admt||'').trim())x.adm=c.admt.trim();if(c.pdf){x.pdf=c.pdf;if(c.pdff)PDFURL[x.id]=URL.createObjectURL(c.pdff);}if(x.t0){const mn=Math.round((Date.now()-x.t0)/60000);x.min=mn;if(mn>=10)x.dur=mn/60;x.hf=hhmm();(x.tl=x.tl||[]).push({k:'Fin',at:x.hf});}vivoDel('poli-'+x.id,['Aprobó','No aprobó','Inconcluso'].includes(c.r)?'':c.r);x.t0=null;if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)){x.e='Realizada';x.r=c.r;}else{x.e=c.r;x.r='';}
+else{if(c.corr)x.corr={motivo:c.motivo.trim()};x.obs=c.obs.trim();if(!c.links){const ok=v=>/^https:\/\//i.test(String(v||'').trim()),lk={};if(ok(c.linf))lk.inf=c.linf.trim();if(ok(c.lgraf))lk.graf=c.lgraf.trim();if(lk.inf||lk.graf)c.links=lk;}if(c.links)x.drive=Object.assign({},x.drive||{},c.links);if((c.admt||'').trim())x.adm=c.admt.trim();if(x.t0){const mn=Math.round((Date.now()-x.t0)/60000);x.min=mn;if(mn>=10)x.dur=mn/60;x.hf=hhmm();(x.tl=x.tl||[]).push({k:'Fin',at:x.hf});}vivoDel('poli-'+x.id,['Aprobó','No aprobó','Inconcluso'].includes(c.r)?'':c.r);x.t0=null;if(['Aprobó','No aprobó','Inconcluso'].includes(c.r)){x.e='Realizada';x.r=c.r;}else{x.e=c.r;x.r='';}
 S.msg=c.corr?'Corrección guardada: la prueba quedó como «'+c.r+'» y el cambio quedó en el historial.':'Prueba cerrada como «'+c.r+'».'+(c.r==='Reprogramar'?' El horario quedó libre en el calendario.':'');S.closing=0;}}
 else if(a==='prog'){if(isP())S.form.p=S.role;const F=S.form,lm=mails(F.lm),ce=F.ce.trim(),au=ausente(F.p,F.f,F.h);if(au){S.msg='No se puede agendar: '+PN[F.p]+' tiene permiso ('+ausTxt(au)+') en esa fecha u hora.';}else if(!F.n.trim()||!F.h){S.msg='Falta el nombre del evaluado o elegir un horario.';}
 else if(!lm.length||lm.some(m=>!okm(m))){S.msg='Revisa los correos de los líderes: escribe uno o varios separados por coma.';}
