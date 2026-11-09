@@ -487,6 +487,8 @@ function puedeEscribir(u, poli) { return VE_TODO.includes(u.rol) || (esPoli(u.ro
 
 app.get('/api/vivo', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
+  // Limpieza: una poligrafía ya cerrada no puede seguir «en ejecución»
+  await pool.query("DELETE FROM en_vivo v USING pruebas p WHERE v.tipo = 'poli' AND v.id = 'poli-' || p.cid AND p.estado NOT IN ('Programada', 'En curso')").catch(() => {});
   let r;
   if (VE_TODO.includes(u.rol)) r = await pool.query('SELECT id, tipo, poligrafista, datos FROM en_vivo ORDER BY id');
   else if (esPoli(u.rol)) r = await pool.query('SELECT id, tipo, poligrafista, datos FROM en_vivo WHERE poligrafista = $1 ORDER BY id', [u.rol]);
@@ -1275,6 +1277,7 @@ app.post('/api/pruebas/guardar', async (req, res) => {
        ON CONFLICT (cid) DO UPDATE SET fecha=$2, hora=$3, poligrafista=$4, evaluado=$5, cc=$6, tipo=$7, estado=$8, datos=$9, actualizado=now()`,
       [cid, f, /^\d{1,2}:\d{2}/.test(x.h || '') ? x.h : null, p, String(x.n || '').slice(0, 120), String(x.doc || '').slice(0, 30), String(x.t || '').slice(0, 40), String(x.e || '').slice(0, 30), d, u.usuario]);
     ok++;
+    if (!['Programada', 'En curso'].includes(String(x.e || ''))) await pool.query('DELETE FROM en_vivo WHERE id = $1', ['poli-' + cid]).catch(() => {});
     const est = String(x.e || ''), hh = String(x.h || '').slice(0, 5), det = [x.t, x.n, f, hh, p].filter(Boolean).join(' · ');
     if (!prev) bitacora(req, u, 'Agendó prueba', det);
     else if (est && est !== prev.estado) bitacora(req, u, 'Cambió estado de prueba a «' + est + '»', det);
