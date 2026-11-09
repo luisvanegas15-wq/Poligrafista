@@ -888,6 +888,27 @@ app.delete('/api/planta', async (req, res) => {
 });
 
 // ===== Base de resultados por poligrafista (HISTORICO / AUSENTISMO) =====
+// ===== Historial del evaluado (todas las bases, por cédula) =====
+app.get('/api/historial', async (req, res) => {
+  const u = await conSesion(req, res); if (!u) return;
+  const cc = String(req.query.cc || '').replace(/\D/g, '').slice(0, 15);
+  if (cc.length < 5) return res.status(400).json({ ok: false, error: 'Cédula no válida.' });
+  const q = `SELECT datos, 'app' AS o FROM pruebas WHERE regexp_replace(coalesce(cc,''), '\\D', '', 'g') = $1
+             UNION ALL SELECT datos, 'excel' AS o FROM resultados WHERE origen = 'excel' AND regexp_replace(coalesce(cc,''), '\\D', '', 'g') = $1`;
+  const r = await pool.query(q, [cc]);
+  const vistos = new Set(), lista = [];
+  for (const row of r.rows.sort((a, b) => (a.o === 'app' ? -1 : 1) - (b.o === 'app' ? -1 : 1))) {
+    const d = row.datos || {}, k = [d.f, String(d.t || '').toLowerCase(), d.p].join('|');
+    if (vistos.has(k)) continue; vistos.add(k);
+    const lim = u.rol === 'lider' || (u.rol === 'th' && d.t !== 'Preempleo');
+    lista.push({ f: d.f, h: d.h, t: d.t, p: d.p, n: d.n, e: d.e, cargo: d.cargo, ciudad: d.ciudad,
+      r: lim ? '' : d.r || '', adm: lim ? '' : d.adm || '', obs: lim ? '' : d.obs || '', inf: lim ? '' : (d.drive && d.drive.inf) || d.pdf || '', oculto: lim });
+  }
+  lista.sort((a, b) => String(b.f || '').localeCompare(String(a.f || '')));
+  bitacora(req, u, 'Consultó historial de evaluado', 'C.C. ' + cc + ' · ' + lista.length + ' registros');
+  res.json({ ok: true, cc, pruebas: lista });
+});
+
 app.get('/api/resultados', async (req, res) => {
   const u = await conSesion(req, res); if (!u) return;
   let r;
